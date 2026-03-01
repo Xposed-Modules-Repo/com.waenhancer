@@ -34,6 +34,7 @@ import com.wmods.wppenhacer.xposed.features.customization.CustomToolbar;
 import com.wmods.wppenhacer.xposed.features.customization.CustomView;
 import com.wmods.wppenhacer.xposed.features.customization.FilterGroups;
 import com.wmods.wppenhacer.xposed.features.customization.HideSeenView;
+import com.wmods.wppenhacer.xposed.features.general.VideoNoteAttachment;
 import com.wmods.wppenhacer.xposed.features.customization.HideTabs;
 import com.wmods.wppenhacer.xposed.features.customization.IGStatus;
 import com.wmods.wppenhacer.xposed.features.customization.SeparateGroup;
@@ -359,6 +360,7 @@ public class FeatureLoader {
                 HideReceipt.class,
                 HideSeen.class,
                 HideSeenView.class,
+                VideoNoteAttachment.class,
                 TagMessage.class,
                 HideTabs.class,
                 IGStatus.class,

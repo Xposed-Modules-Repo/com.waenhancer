@@ -2673,4 +2673,19 @@ public class Unobfuscator {
                     .toArray(Class[]::new);
         });
     }
+
+    public synchronized static Class<?> loadAttachmentPickerClass(ClassLoader classLoader) throws Exception {
+        // Attempt to find the Attachment Picker class.
+        // It often inflates items like document, camera, gallery, audio, etc.
+        return UnobfuscatorCache.getInstance().getClass(classLoader, () -> {
+            var clazz = findFirstClassUsingStrings(classLoader, StringMatchType.Contains,
+                    "document", "camera", "gallery", "audio", "location", "contact");
+            if (clazz != null)
+                return clazz;
+
+            // Fallback: search for BottomSheet or picker related strings
+            return findFirstClassUsingStrings(classLoader, StringMatchType.Contains,
+                    "attachment_picker_bottom_sheet");
+        });
+    }
 }
