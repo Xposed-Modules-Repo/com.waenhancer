@@ -6,6 +6,7 @@ import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
+import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
@@ -26,8 +27,12 @@ import com.wmods.wppenhacer.xposed.utils.Utils;
 import org.luckypray.dexkit.query.enums.StringMatchType;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -49,14 +54,19 @@ public class CallRecording extends Feature {
 
     private final AtomicBoolean isRecording = new AtomicBoolean(false);
     private final AtomicBoolean isCallConnected = new AtomicBoolean(false);
-    private final AtomicReference<AudioRecord> audioRecordRef = new AtomicReference<>();
-    private final AtomicReference<Thread> recordingThreadRef = new AtomicReference<>();
-    private final AtomicReference<ParcelFileDescriptor> outputPfdRef = new AtomicReference<>();
-    private final AtomicReference<FileOutputStream> outputStreamRef = new AtomicReference<>();
+
     private final AtomicReference<File> outputFileRef = new AtomicReference<>();
+    private final AtomicReference<File> tempUplinkFile = new AtomicReference<>();
+    private final AtomicReference<File> tempDownlinkFile = new AtomicReference<>();
+
+    // Persistent output streams — kept open for the entire recording session
+    private volatile FileOutputStream uplinkOutputStream = null;
+    private volatile FileOutputStream downlinkOutputStream = null;
+    private final Object uplinkStreamLock = new Object();
+    private final Object downlinkStreamLock = new Object();
+
     private final AtomicReference<String> currentPhoneNumber = new AtomicReference<>();
     private final AtomicReference<ScheduledFuture<?>> delayedStartFuture = new AtomicReference<>();
-    private final AtomicLong payloadSize = new AtomicLong(0L);
     private final ScheduledExecutorService delayedStartScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "WaEnhancer-CallDelayedStart");
         thread.setDaemon(true);
@@ -69,6 +79,11 @@ public class CallRecording extends Feature {
     private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
     private static final short CHANNELS = 1;
     private static final short BITS_PER_SAMPLE = 16;
+
+    // Diagnostic counters — log periodically to confirm hooks are actively firing
+    private final AtomicLong uplinkWriteCount = new AtomicLong(0);
+    private final AtomicLong downlinkWriteCount = new AtomicLong(0);
+    private static final long DIAG_LOG_INTERVAL = 200;
 
     public CallRecording(@NonNull ClassLoader loader, @NonNull XSharedPreferences preferences) {
         super(loader, preferences);
@@ -98,7 +113,8 @@ public class CallRecording extends Feature {
                     XposedBridge.hookAllMethods(clsCallEventCallback, "fieldstatsReady", new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            handleCallEnded("fieldstatsReady");
+                            XposedBridge.log("WaEnhancer: fieldstatsReady - stopping recording if active");
+                            stopRecording();
                         }
                     });
                     hooksInstalled++;
@@ -139,6 +155,137 @@ public class CallRecording extends Feature {
         } catch (Throwable e) {
             XposedBridge.log("WaEnhancer: Could not hook VoipActivity: " + e.getMessage());
         }
+
+        // --- JAVA PCM HOOKS FOR WEBRTC ---
+        // Hook AudioRecord.read() — captures UPLINK (microphone / our voice)
+        XposedBridge.hookAllMethods(android.media.AudioRecord.class, "read", new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (!isRecording.get())
+                    return;
+                FileOutputStream fos = uplinkOutputStream;
+                if (fos == null)
+                    return;
+
+                int bytesRead = (Integer) param.getResult();
+                if (bytesRead <= 0)
+                    return;
+
+                Object firstArg = param.args[0];
+                byte[] byteData = null;
+                int dataLen = bytesRead;
+
+                if (firstArg instanceof byte[]) {
+                    byteData = (byte[]) firstArg;
+                    dataLen = bytesRead;
+                } else if (firstArg instanceof short[]) {
+                    short[] shortData = (short[]) firstArg;
+                    int offsetInShorts = (param.args.length > 1) ? (Integer) param.args[1] : 0;
+                    dataLen = bytesRead * 2;
+                    byteData = new byte[dataLen];
+                    ByteBuffer.wrap(byteData).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                            .put(shortData, offsetInShorts, bytesRead);
+                } else if (firstArg instanceof ByteBuffer) {
+                    ByteBuffer buffer = (ByteBuffer) firstArg;
+                    byteData = new byte[bytesRead];
+                    int oldPos = buffer.position();
+                    buffer.position(oldPos - bytesRead);
+                    buffer.get(byteData, 0, bytesRead);
+                    buffer.position(oldPos);
+                    dataLen = bytesRead;
+                }
+
+                if (byteData != null && dataLen > 0) {
+                    long count = uplinkWriteCount.incrementAndGet();
+                    if (count == 1 || count % DIAG_LOG_INTERVAL == 0) {
+                        XposedBridge.log("WaEnhancer: AudioRecord.read hook fired #" + count + " bytes=" + dataLen);
+                    }
+                    synchronized (uplinkStreamLock) {
+                        FileOutputStream currentFos = uplinkOutputStream;
+                        if (currentFos != null) {
+                            try {
+                                currentFos.write(byteData, 0, dataLen);
+                            } catch (Exception e) {
+                                // Stream may have been closed concurrently
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Hook AudioTrack.write() — captures DOWNLINK (other party's voice)
+        XposedBridge.hookAllMethods(android.media.AudioTrack.class, "write", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (!isRecording.get())
+                    return;
+                FileOutputStream fos = downlinkOutputStream;
+                if (fos == null)
+                    return;
+
+                Object firstArg = param.args[0];
+                int sizeInBytes = 0;
+                byte[] byteData = null;
+
+                if (firstArg instanceof byte[]) {
+                    int offset = (Integer) param.args[1];
+                    sizeInBytes = (Integer) param.args[2];
+                    byteData = (byte[]) firstArg;
+                    if (offset != 0) {
+                        byte[] trimmed = new byte[sizeInBytes];
+                        System.arraycopy(byteData, offset, trimmed, 0, sizeInBytes);
+                        byteData = trimmed;
+                    }
+                } else if (firstArg instanceof short[]) {
+                    int offsetInShorts = (Integer) param.args[1];
+                    int sizeInShorts = (Integer) param.args[2];
+                    sizeInBytes = sizeInShorts * 2;
+                    short[] shortData = (short[]) firstArg;
+                    byteData = new byte[sizeInBytes];
+                    ByteBuffer.wrap(byteData).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                            .put(shortData, offsetInShorts, sizeInShorts);
+                } else if (firstArg instanceof float[]) {
+                    int offsetInFloats = (Integer) param.args[1];
+                    int sizeInFloats = (Integer) param.args[2];
+                    float[] floatData = (float[]) firstArg;
+                    sizeInBytes = sizeInFloats * 2;
+                    byteData = new byte[sizeInBytes];
+                    ByteBuffer bb = ByteBuffer.wrap(byteData).order(ByteOrder.LITTLE_ENDIAN);
+                    for (int i = 0; i < sizeInFloats; i++) {
+                        float sample = floatData[offsetInFloats + i];
+                        sample = Math.max(-1.0f, Math.min(1.0f, sample));
+                        short pcmSample = (short) (sample * 32767);
+                        bb.putShort(pcmSample);
+                    }
+                } else if (firstArg instanceof ByteBuffer) {
+                    sizeInBytes = (Integer) param.args[1];
+                    ByteBuffer buffer = (ByteBuffer) firstArg;
+                    byteData = new byte[sizeInBytes];
+                    int oldPos = buffer.position();
+                    buffer.get(byteData, 0, sizeInBytes);
+                    buffer.position(oldPos);
+                }
+
+                if (byteData != null && sizeInBytes > 0) {
+                    long count = downlinkWriteCount.incrementAndGet();
+                    if (count == 1 || count % DIAG_LOG_INTERVAL == 0) {
+                        XposedBridge.log("WaEnhancer: AudioTrack.write hook fired #" + count + " bytes=" + sizeInBytes);
+                    }
+                    synchronized (downlinkStreamLock) {
+                        FileOutputStream currentFos = downlinkOutputStream;
+                        if (currentFos != null) {
+                            try {
+                                currentFos.write(byteData, 0, sizeInBytes);
+                            } catch (Exception e) {
+                                // Stream may have been closed concurrently
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        hooksInstalled += 2;
 
         XposedBridge.log("WaEnhancer: Call Recording initialized with " + hooksInstalled + " hooks");
     }
@@ -219,7 +366,7 @@ public class CallRecording extends Feature {
 
             for (String cmd : commands) {
                 try {
-                    Process process = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                    Process process = Runtime.getRuntime().exec(new String[] { "su", "-c", cmd });
                     int exitCode = process.waitFor();
                     XposedBridge.log("WaEnhancer: " + cmd + " exit: " + exitCode);
                 } catch (Exception e) {
@@ -250,7 +397,6 @@ public class CallRecording extends Feature {
             return;
         }
 
-        AudioRecord selectedAudioRecord = null;
         try {
             if (ContextCompat.checkSelfPermission(FeatureLoader.mApp,
                     Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -258,7 +404,16 @@ public class CallRecording extends Feature {
                 return;
             }
 
-            WaeIIFace bridge = WppCore.getClientBridge();
+            // Use upstream's OutputTarget pattern for robust bridge fallback
+            WaeIIFace bridge = null;
+            try {
+                bridge = WppCore.getClientBridge();
+            } catch (Throwable t) {
+                XposedBridge
+                        .log("WaEnhancer: Could not get client bridge, using app context storage: " + t.getMessage());
+            }
+
+            File cacheDir = FeatureLoader.mApp.getCacheDir();
             String packageName = FeatureLoader.mApp.getPackageName();
             String appName = packageName.contains("w4b") ? "WA Business" : "WhatsApp";
             String settingsPath = prefs.getString("call_recording_path",
@@ -266,10 +421,12 @@ public class CallRecording extends Feature {
             File parentDir = new File(settingsPath, "WA Call Recordings");
             File appDir = new File(parentDir, appName);
 
-            if (!appDir.exists() && !appDir.mkdirs()) {
-                boolean dirCreated = bridge.createDir(appDir.getAbsolutePath());
-                if (!dirCreated && !appDir.exists()) {
-                    throw new IOException("Could not create output directory: " + appDir.getAbsolutePath());
+            if (bridge != null) {
+                if (!appDir.exists() && !appDir.mkdirs()) {
+                    boolean dirCreated = bridge.createDir(appDir.getAbsolutePath());
+                    if (!dirCreated && !appDir.exists()) {
+                        throw new IOException("Could not create output directory: " + appDir.getAbsolutePath());
+                    }
                 }
             }
 
@@ -278,121 +435,55 @@ public class CallRecording extends Feature {
                     ? "Call_" + phoneNumber.replaceAll("[^+0-9]", "") + "_" + timestamp + ".wav"
                     : "Call_" + timestamp + ".wav";
 
-            File file = new File(appDir, fileName);
-            ParcelFileDescriptor parcelFileDescriptor = bridge.openFile(file.getAbsolutePath(), true);
-            if (parcelFileDescriptor == null) {
-                throw new IOException("Bridge openFile returned null for " + file.getAbsolutePath());
-            }
-            FileOutputStream outputStream = new FileOutputStream(parcelFileDescriptor.getFileDescriptor());
-            outputStream.write(new byte[44]);
-            outputStream.flush();
+            // Create temp PCM files in cache
+            File up = new File(cacheDir, "uplink_" + System.currentTimeMillis() + ".pcm");
+            File down = new File(cacheDir, "downlink_" + System.currentTimeMillis() + ".pcm");
+            tempUplinkFile.set(up);
+            tempDownlinkFile.set(down);
 
-            outputFileRef.set(file);
-            outputPfdRef.set(parcelFileDescriptor);
-            outputStreamRef.set(outputStream);
+            // Resolve final output path using upstream's bridge fallback pattern
+            OutputTarget outputTarget = openOutputTarget(bridge, appDir, fileName);
+            outputFileRef.set(outputTarget.file);
+
+            // Close the output target stream for now — we'll write the final WAV after
+            // mixing
+            try {
+                outputTarget.outputStream.close();
+            } catch (Exception ignored) {
+            }
+            if (outputTarget.parcelFileDescriptor != null) {
+                try {
+                    outputTarget.parcelFileDescriptor.close();
+                } catch (Exception ignored) {
+                }
+            }
 
             boolean useRoot = prefs.getBoolean("call_recording_use_root", false);
             if (useRoot) {
                 grantVoiceCallPermission();
             }
 
-            int minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
-            if (minBufferSize <= 0) {
-                minBufferSize = SAMPLE_RATE;
+            // Open persistent output streams BEFORE setting isRecording = true
+            synchronized (uplinkStreamLock) {
+                uplinkOutputStream = new FileOutputStream(up);
             }
-            int bufferSize = minBufferSize * 6;
-            XposedBridge.log("WaEnhancer: Buffer: " + bufferSize + ", useRoot: " + useRoot);
-
-            int[] audioSources = new int[]{
-                    MediaRecorder.AudioSource.VOICE_CALL,          // 4: Both sides (Usually requires Root or System App)
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION, // 7: VoIP tuned audio (Often captures both via Acoustic Echo Canceler in software)
-                    MediaRecorder.AudioSource.VOICE_DOWNLINK,      // 3: Rx Only
-                    MediaRecorder.AudioSource.VOICE_UPLINK,        // 2: Tx Only
-                    6,                                             // 6: VOICE_RECOGNITION (often succeeds but only gets Tx)
-                    MediaRecorder.AudioSource.MIC                  // 1: Raw Mic
-            };
-            String[] sourceNames = new String[]{
-                    "VOICE_CALL",
-                    "VOICE_COMMUNICATION",
-                    "VOICE_DOWNLINK",
-                    "VOICE_UPLINK",
-                    "VOICE_RECOGNITION",
-                    "MIC"
-            };
-
-            String usedSource = "none";
-
-            for (int i = 0; i < audioSources.length; i++) {
-                try {
-                    XposedBridge.log("WaEnhancer: Trying " + sourceNames[i]);
-                    @SuppressLint("MissingPermission")
-                    AudioRecord testRecord = new AudioRecord(audioSources[i], SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT,
-                            bufferSize);
-
-                    if (testRecord.getState() == AudioRecord.STATE_INITIALIZED) {
-                        selectedAudioRecord = testRecord;
-                        usedSource = sourceNames[i];
-                        XposedBridge.log("WaEnhancer: SUCCESS " + sourceNames[i]);
-                        break;
-                    }
-                    testRecord.release();
-                    XposedBridge.log("WaEnhancer: FAILED " + sourceNames[i]);
-                } catch (Throwable t) {
-                    XposedBridge.log("WaEnhancer: Exception " + sourceNames[i] + ": " + t.getMessage());
-                }
+            synchronized (downlinkStreamLock) {
+                downlinkOutputStream = new FileOutputStream(down);
             }
 
-            if (selectedAudioRecord == null) {
-                XposedBridge.log("WaEnhancer: All audio sources failed");
-                closeOutputResources(false);
-                return;
-            }
+            // Reset diagnostic counters
+            uplinkWriteCount.set(0);
+            downlinkWriteCount.set(0);
 
-            audioRecordRef.set(selectedAudioRecord);
+            // NOW set recording flag — hooks will start writing data
             if (!isRecording.compareAndSet(false, true)) {
-                selectedAudioRecord.release();
-                audioRecordRef.set(null);
-                closeOutputResources(false);
+                closeStreams();
                 return;
             }
 
-            payloadSize.set(0L);
-            selectedAudioRecord.startRecording();
-            XposedBridge.log("WaEnhancer: Recording started (" + usedSource + "): " + file.getAbsolutePath());
-
-            final int finalBufferSize = bufferSize;
-            Thread recordThread = new Thread(() -> {
-                byte[] buffer = new byte[finalBufferSize];
-                XposedBridge.log("WaEnhancer: Recording thread started");
-
-                while (isRecording.get()) {
-                    try {
-                        AudioRecord record = audioRecordRef.get();
-                        FileOutputStream stream = outputStreamRef.get();
-                        if (record == null || stream == null) {
-                            break;
-                        }
-
-                        int read = record.read(buffer, 0, buffer.length);
-                        if (read > 0) {
-                            stream.write(buffer, 0, read);
-                            payloadSize.addAndGet(read);
-                        } else if (read < 0) {
-                            XposedBridge.log("WaEnhancer: Audio read error code: " + read);
-                            break;
-                        }
-                    } catch (IOException e) {
-                        XposedBridge.log("WaEnhancer: Recording write error: " + e.getMessage());
-                        break;
-                    } catch (Throwable t) {
-                        XposedBridge.log("WaEnhancer: Recording thread error: " + t.getMessage());
-                        break;
-                    }
-                }
-                XposedBridge.log("WaEnhancer: Recording thread ended, bytes: " + payloadSize.get());
-            }, "WaEnhancer-RecordingThread");
-            recordingThreadRef.set(recordThread);
-            recordThread.start();
+            XposedBridge.log("WaEnhancer: Recording started — Output to: " + outputTarget.file.getAbsolutePath());
+            XposedBridge.log("WaEnhancer: Uplink PCM: " + up.getAbsolutePath());
+            XposedBridge.log("WaEnhancer: Downlink PCM: " + down.getAbsolutePath());
 
             if (prefs.getBoolean("call_recording_toast", false)) {
                 Utils.showToast("Recording started", Toast.LENGTH_SHORT);
@@ -401,130 +492,306 @@ public class CallRecording extends Feature {
         } catch (Exception e) {
             XposedBridge.log("WaEnhancer: startRecording error: " + e.getMessage());
             isRecording.set(false);
-            if (selectedAudioRecord != null) {
-                try {
-                    selectedAudioRecord.release();
-                } catch (Throwable ignored) {
-                }
-            }
-            audioRecordRef.set(null);
-            recordingThreadRef.set(null);
-            closeOutputResources(true);
-            payloadSize.set(0L);
+            closeStreams();
         }
     }
 
     private synchronized void stopRecording() {
         cancelDelayedStart();
-        if (!isRecording.getAndSet(false))
+        XposedBridge.log("WaEnhancer: stopRecording called, isRecording=" + isRecording.get());
+        if (!isRecording.getAndSet(false)) {
+            XposedBridge.log("WaEnhancer: stopRecording early-exit (was not recording)");
             return;
+        }
 
         try {
-            AudioRecord audioRecord = audioRecordRef.getAndSet(null);
-            if (audioRecord != null) {
-                try {
-                    audioRecord.stop();
-                } catch (Exception ignored) {
-                }
-                audioRecord.release();
+            // Close streams first — ensures all buffered data is flushed
+            closeStreams();
+
+            File upPcm = tempUplinkFile.getAndSet(null);
+            File downPcm = tempDownlinkFile.getAndSet(null);
+            File finalOut = outputFileRef.getAndSet(null);
+
+            XposedBridge.log("WaEnhancer: Recording stopped. Uplink writes: " + uplinkWriteCount.get()
+                    + ", Downlink writes: " + downlinkWriteCount.get());
+
+            if (upPcm != null) {
+                XposedBridge.log("WaEnhancer: Uplink PCM size: " + upPcm.length() + " bytes");
+            }
+            if (downPcm != null) {
+                XposedBridge.log("WaEnhancer: Downlink PCM size: " + downPcm.length() + " bytes");
             }
 
-            Thread recordingThread = recordingThreadRef.getAndSet(null);
-            if (recordingThread != null && recordingThread != Thread.currentThread()) {
-                recordingThread.join(2000);
-            }
+            if (finalOut != null && upPcm != null && downPcm != null
+                    && (upPcm.length() > 0 || downPcm.length() > 0)) {
 
-            long writtenBytes = payloadSize.get();
-            boolean saved = finalizeRecordingFile(writtenBytes);
-            File outputFile = outputFileRef.getAndSet(null);
+                XposedBridge.log("WaEnhancer: Mixing PCM streams to WAV...");
 
-            XposedBridge.log("WaEnhancer: Recording stopped, size: " + writtenBytes +
-                    ", file=" + (outputFile != null ? outputFile.getAbsolutePath() : "unknown"));
+                File finalUpPcm = upPcm;
+                File finalDownPcm = downPcm;
+                new Thread(() -> {
+                    try {
+                        mixPcmToWav(finalUpPcm, finalDownPcm, finalOut);
+                        if (prefs.getBoolean("call_recording_toast", false)) {
+                            Utils.showToast("Recording saved!", Toast.LENGTH_SHORT);
+                        }
+                    } catch (Exception e) {
+                        XposedBridge.log("WaEnhancer: Mix error: " + e.getMessage());
+                        if (prefs.getBoolean("call_recording_toast", false)) {
+                            Utils.showToast("Recording failed", Toast.LENGTH_SHORT);
+                        }
+                    } finally {
+                        finalUpPcm.delete();
+                        finalDownPcm.delete();
+                    }
+                }, "WaEnhancer-AudioMixer").start();
 
-            if (prefs.getBoolean("call_recording_toast", false)) {
-                Utils.showToast(saved ? "Recording saved!" : "Recording failed", Toast.LENGTH_SHORT);
+            } else {
+                XposedBridge.log("WaEnhancer: Missing PCM files or both empty, skipping mix.");
+                if (upPcm != null)
+                    upPcm.delete();
+                if (downPcm != null)
+                    downPcm.delete();
             }
 
             currentPhoneNumber.set(null);
-            payloadSize.set(0L);
         } catch (Exception e) {
-            XposedBridge.log("WaEnhancer: stopRecording error: " + e.getMessage());
-            closeOutputResources(false);
-            outputFileRef.set(null);
+            XposedBridge.log("WaEnhancer: stopRecording exception: " + e.getMessage());
         }
     }
 
-    private boolean finalizeRecordingFile(long writtenBytes) {
-        FileOutputStream stream = outputStreamRef.getAndSet(null);
-        ParcelFileDescriptor pfd = outputPfdRef.getAndSet(null);
-        File outputFile = outputFileRef.get();
-        if (stream == null) {
-            if (pfd != null) {
+    private void closeStreams() {
+        synchronized (uplinkStreamLock) {
+            if (uplinkOutputStream != null) {
                 try {
-                    pfd.close();
-                } catch (IOException ignored) {
-                }
+                    uplinkOutputStream.flush();
+                    uplinkOutputStream.close();
+                } catch (Exception e) {
+                    /* ignore */ }
+                uplinkOutputStream = null;
             }
-            return false;
+        }
+        synchronized (downlinkStreamLock) {
+            if (downlinkOutputStream != null) {
+                try {
+                    downlinkOutputStream.flush();
+                    downlinkOutputStream.close();
+                } catch (Exception e) {
+                    /* ignore */ }
+                downlinkOutputStream = null;
+            }
+        }
+    }
+
+    /**
+     * Mix two raw PCM files (16-bit LE mono) into a single WAV file.
+     * Samples are added together with clamping to prevent clipping.
+     */
+    private void mixPcmToWav(File uplinkPcm, File downlinkPcm, File outputWav) throws IOException {
+        long upLen = uplinkPcm.exists() ? uplinkPcm.length() : 0;
+        long downLen = downlinkPcm.exists() ? downlinkPcm.length() : 0;
+        long maxLen = Math.max(upLen, downLen);
+
+        if (maxLen == 0) {
+            XposedBridge.log("WaEnhancer: Both PCM files empty, nothing to mix.");
+            return;
         }
 
-        boolean success = writtenBytes > 0;
+        File cacheOut = new File(FeatureLoader.mApp.getCacheDir(),
+                "mixed_" + System.currentTimeMillis() + ".wav");
+
+        try (FileOutputStream wavOut = new FileOutputStream(cacheOut)) {
+            writeWavHeader(wavOut, maxLen);
+
+            FileInputStream upIn = upLen > 0 ? new FileInputStream(uplinkPcm) : null;
+            FileInputStream downIn = downLen > 0 ? new FileInputStream(downlinkPcm) : null;
+
+            try {
+                byte[] upBuf = new byte[8192];
+                byte[] downBuf = new byte[8192];
+                byte[] mixBuf = new byte[8192];
+                long remaining = maxLen;
+
+                while (remaining > 0) {
+                    int toRead = (int) Math.min(remaining, upBuf.length);
+
+                    int upRead = 0;
+                    if (upIn != null) {
+                        upRead = upIn.read(upBuf, 0, toRead);
+                        if (upRead < 0)
+                            upRead = 0;
+                    }
+
+                    int downRead = 0;
+                    if (downIn != null) {
+                        downRead = downIn.read(downBuf, 0, toRead);
+                        if (downRead < 0)
+                            downRead = 0;
+                    }
+
+                    int mixLen = Math.max(upRead, downRead);
+                    if (mixLen == 0)
+                        break;
+
+                    if (upRead < mixLen) {
+                        for (int i = upRead; i < mixLen; i++)
+                            upBuf[i] = 0;
+                    }
+                    if (downRead < mixLen) {
+                        for (int i = downRead; i < mixLen; i++)
+                            downBuf[i] = 0;
+                    }
+
+                    // Mix 16-bit LE samples with clamping
+                    for (int i = 0; i + 1 < mixLen; i += 2) {
+                        short upSample = (short) ((upBuf[i] & 0xFF) | (upBuf[i + 1] << 8));
+                        short downSample = (short) ((downBuf[i] & 0xFF) | (downBuf[i + 1] << 8));
+
+                        int mixed = upSample + downSample;
+                        if (mixed > 32767)
+                            mixed = 32767;
+                        if (mixed < -32768)
+                            mixed = -32768;
+
+                        mixBuf[i] = (byte) (mixed & 0xFF);
+                        mixBuf[i + 1] = (byte) ((mixed >> 8) & 0xFF);
+                    }
+
+                    wavOut.write(mixBuf, 0, mixLen);
+                    remaining -= mixLen;
+                }
+            } finally {
+                if (upIn != null)
+                    try {
+                        upIn.close();
+                    } catch (Exception e) {
+                        /* ignore */ }
+                if (downIn != null)
+                    try {
+                        downIn.close();
+                    } catch (Exception e) {
+                        /* ignore */ }
+            }
+        }
+
+        // Update WAV header with actual data size
+        long actualDataSize = cacheOut.length() - 44;
+        try (RandomAccessFile raf = new RandomAccessFile(cacheOut, "rw")) {
+            raf.seek(4);
+            writeIntLE(raf, (int) (actualDataSize + 36));
+            raf.seek(40);
+            writeIntLE(raf, (int) actualDataSize);
+        }
+
+        XposedBridge.log("WaEnhancer: WAV mixing complete. Size: " + cacheOut.length() + " bytes");
+
+        moveFileToOutput(cacheOut, outputWav);
+    }
+
+    private void moveFileToOutput(File source, File dest) {
+        // Try direct rename
+        if (source.renameTo(dest)) {
+            XposedBridge.log("WaEnhancer: Moved WAV to: " + dest.getAbsolutePath());
+            Utils.scanFile(dest);
+            return;
+        }
+
+        // Try direct copy
+        try (FileInputStream fis = new FileInputStream(source);
+                FileOutputStream fos = new FileOutputStream(dest)) {
+            byte[] buf = new byte[8192];
+            int read;
+            while ((read = fis.read(buf)) > 0) {
+                fos.write(buf, 0, read);
+            }
+            fos.flush();
+            XposedBridge.log("WaEnhancer: Copied WAV to: " + dest.getAbsolutePath());
+            Utils.scanFile(dest);
+            source.delete();
+            return;
+        } catch (Exception e) {
+            XposedBridge.log("WaEnhancer: Direct copy failed: " + e.getMessage());
+        }
+
+        // Fall back to root copy
         try {
-            writeWavHeader(stream, writtenBytes);
-            stream.flush();
-        } catch (IOException e) {
-            XposedBridge.log("WaEnhancer: Failed to write WAV header: " + e.getMessage());
-            success = false;
-        } finally {
-            try {
-                stream.close();
-            } catch (IOException ignored) {
+            String cpCmd = String.format("cp \"%s\" \"%s\" && chmod 666 \"%s\"",
+                    source.getAbsolutePath(),
+                    dest.getAbsolutePath(),
+                    dest.getAbsolutePath());
+            XposedBridge.log("WaEnhancer: Executing root copy: " + cpCmd);
+
+            Process cpProcess = Runtime.getRuntime().exec(new String[] { "su", "-c", cpCmd });
+            int cpRc = cpProcess.waitFor();
+
+            if (cpRc == 0) {
+                XposedBridge.log("WaEnhancer: Root copy success => " + dest.getAbsolutePath());
+                Utils.scanFile(dest);
+            } else {
+                XposedBridge.log("WaEnhancer: Root copy failed with code " + cpRc);
             }
-            if (pfd != null) {
-                try {
-                    pfd.close();
-                } catch (IOException ignored) {
+        } catch (Exception ex) {
+            XposedBridge.log("WaEnhancer: Root copy exception: " + ex.getMessage());
+        }
+        source.delete();
+    }
+
+    // ---- Upstream OutputTarget pattern for robust file output ----
+
+    @NonNull
+    private OutputTarget openOutputTarget(WaeIIFace bridge, @NonNull File preferredDir, @NonNull String fileName)
+            throws IOException {
+        File preferredFile = new File(preferredDir, fileName);
+        if (bridge != null) {
+            try {
+                ParcelFileDescriptor parcelFileDescriptor = bridge.openFile(preferredFile.getAbsolutePath(), true);
+                if (parcelFileDescriptor != null) {
+                    FileOutputStream outputStream = new FileOutputStream(parcelFileDescriptor.getFileDescriptor());
+                    return new OutputTarget(preferredFile, parcelFileDescriptor, outputStream);
                 }
+                XposedBridge.log("WaEnhancer: Bridge openFile returned null, fallback to Android/data path");
+            } catch (Throwable t) {
+                XposedBridge
+                        .log("WaEnhancer: Bridge openFile failed, fallback to Android/data path: " + t.getMessage());
             }
         }
 
-        if (success && outputFile != null) {
-            Utils.scanFile(outputFile);
+        File appExternalDir = FeatureLoader.mApp.getExternalFilesDir(null);
+        if (appExternalDir == null) {
+            throw new IOException("Could not resolve app external files directory");
         }
-        return success;
+        File fallbackDir = new File(appExternalDir, "Recordings");
+        if (!fallbackDir.exists() && !fallbackDir.mkdirs()) {
+            throw new IOException("Could not create fallback recording directory: " + fallbackDir.getAbsolutePath());
+        }
+
+        File fallbackFile = new File(fallbackDir, fileName);
+        FileOutputStream fallbackStream = new FileOutputStream(fallbackFile);
+        XposedBridge.log("WaEnhancer: Recording fallback path in Android/data: " + fallbackFile.getAbsolutePath());
+        return new OutputTarget(fallbackFile, null, fallbackStream);
     }
 
-    private void closeOutputResources(boolean deleteOutputFile) {
-        FileOutputStream stream = outputStreamRef.getAndSet(null);
-        ParcelFileDescriptor pfd = outputPfdRef.getAndSet(null);
-        File outputFile = outputFileRef.getAndSet(null);
+    private static final class OutputTarget {
+        @NonNull
+        private final File file;
+        private final ParcelFileDescriptor parcelFileDescriptor;
+        @NonNull
+        private final FileOutputStream outputStream;
 
-        if (stream != null) {
-            try {
-                stream.close();
-            } catch (IOException ignored) {
-            }
-        }
-        if (pfd != null) {
-            try {
-                pfd.close();
-            } catch (IOException ignored) {
-            }
-        }
-
-        if (deleteOutputFile && outputFile != null && outputFile.exists() && !outputFile.delete()) {
-            XposedBridge.log("WaEnhancer: Could not delete incomplete recording: " + outputFile.getAbsolutePath());
+        private OutputTarget(@NonNull File file, ParcelFileDescriptor parcelFileDescriptor,
+                @NonNull FileOutputStream outputStream) {
+            this.file = file;
+            this.parcelFileDescriptor = parcelFileDescriptor;
+            this.outputStream = outputStream;
         }
     }
 
-    private void writeWavHeader(@NonNull FileOutputStream stream, long dataSize) throws IOException {
+    private void writeWavHeader(FileOutputStream out, long dataSize) throws IOException {
         long clampedDataSize = Math.min(dataSize, 0xFFFFFFFFL);
         long totalDataLen = clampedDataSize + 36;
         long byteRate = (long) SAMPLE_RATE * CHANNELS * BITS_PER_SAMPLE / 8;
 
-        stream.getChannel().position(0);
         byte[] header = new byte[44];
-
         header[0] = 'R';
         header[1] = 'I';
         header[2] = 'F';
@@ -570,31 +837,38 @@ public class CallRecording extends Feature {
         header[42] = (byte) ((clampedDataSize >> 16) & 0xff);
         header[43] = (byte) ((clampedDataSize >> 24) & 0xff);
 
-        stream.write(header);
+        out.write(header);
+    }
+
+    private void writeIntLE(RandomAccessFile raf, int value) throws IOException {
+        raf.write(value & 0xFF);
+        raf.write((value >> 8) & 0xFF);
+        raf.write((value >> 16) & 0xFF);
+        raf.write((value >> 24) & 0xFF);
     }
 
     private boolean shouldRecord(String phoneNumber) {
         try {
             int mode = Integer.parseInt(prefs.getString("call_recording_mode", "0"));
             if (mode == 0)
-                return true; // Record All
+                return true;
 
             String blacklist = prefs.getString("call_recording_blacklist", "[]");
             String whitelist = prefs.getString("call_recording_whitelist", "[]");
 
-            if (mode == 2) { // Exclude Selected (Blacklist)
+            if (mode == 2) {
                 if (phoneNumber == null)
                     return true;
                 String cleanPhone = phoneNumber.replaceAll("[^0-9]", "");
                 return !isNumberInList(cleanPhone, blacklist);
-            } else if (mode == 3) { // Include Selected (Whitelist)
+            } else if (mode == 3) {
                 if (whitelist.equals("[]") || whitelist.isEmpty())
                     return false;
                 if (phoneNumber == null)
                     return false;
                 String cleanPhone = phoneNumber.replaceAll("[^0-9]", "");
                 return isNumberInList(cleanPhone, whitelist);
-            } else if (mode == 1) { // Record Unknown Only
+            } else if (mode == 1) {
                 return true;
             }
         } catch (Exception e) {
