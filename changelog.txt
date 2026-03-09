@@ -1,3 +1,4 @@
-[FIXED]
-- Fixed bugs that sent videos in low quality
-- Fixed bug when selecting Story styles ("Facebook table" style was removed, WhatsApp no longer supports this style)
+[Added]
+- Introduced Auto Status Forward upon reply feature
+
+Now status will be automatically forwarded if someone replies to your status with a message according to keyword you make rules in enhancer app.
