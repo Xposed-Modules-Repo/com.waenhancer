@@ -12,7 +12,6 @@ import com.wmods.wppenhacer.xposed.core.Feature;
 import com.wmods.wppenhacer.xposed.core.WppCore;
 import com.wmods.wppenhacer.xposed.core.components.FMessageWpp;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
-import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
 import org.json.JSONArray;
@@ -30,6 +29,13 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 
+/**
+ * AutoStatusForward
+ *
+ * Hooks Unobfuscator.loadReceiptMethod() to intercept fully constructed
+ * incoming messages from the cache with their fields (text, quoted context)
+ * populated.
+ */
 public class AutoStatusForward extends Feature {
 
     private static Field quotedContextFieldCache = null;
@@ -42,28 +48,34 @@ public class AutoStatusForward extends Feature {
 
     @Override
     public void doHook() throws Exception {
-        if (FMessageWpp.TYPE == null)
-            return;
-        log("AutoStatusForward – hooking all constructors of " + FMessageWpp.TYPE.getName());
+        log("AutoStatusForward – hooking loadReceiptMethod (fully populated incoming messages)");
+        Method receiptMethod = Unobfuscator.loadReceiptMethod(classLoader);
 
-        XposedBridge.hookAllConstructors(FMessageWpp.TYPE, new XC_MethodHook() {
+        XposedBridge.hookMethod(receiptMethod, new XC_MethodHook() {
             @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 try {
                     prefs.reload();
                     if (!prefs.getBoolean("auto_status_forward", false))
                         return;
-                    handleFMessage(param.thisObject);
+
+                    // Tasker's incoming-message filter
+                    if (param.args[4] == "sender" || param.args[1] == null || param.args[3] == null)
+                        return;
+
+                    Object rawKey = param.args[3];
+                    Object fMessageRaw = WppCore.getFMessageFromKey(rawKey);
+                    if (fMessageRaw != null) {
+                        handleFMessage(fMessageRaw);
+                    }
                 } catch (Throwable t) {
-                    // silent catch to prevent WA crashes
+                    log("AutoStatusForward – hook err: " + t);
                 }
             }
         });
     }
 
     private void handleFMessage(Object fMessageObj) {
-        if (fMessageObj == null)
-            return;
         FMessageWpp incoming;
         try {
             incoming = new FMessageWpp(fMessageObj);
@@ -78,18 +90,26 @@ public class AutoStatusForward extends Feature {
         if (senderJid == null || senderJid.isNull() || senderJid.isGroup())
             return;
 
-        // FAST PATH: Check rules first so we don't do expensive checks if not matching
+        String phone = senderJid.getPhoneNumber();
         String text = incoming.getMessageStr();
-        if (!matchesRules(text))
+        log("AutoStatusForward – incoming msg from " + phone + " [text: «" + text + "»]");
+
+        // 1. Rule matching
+        boolean ruleMatches = matchesRules(text);
+        if (!ruleMatches) {
+            log("AutoStatusForward – did not match any text rule, skipping.");
             return;
+        }
 
-        log("AutoStatusForward – text match: «" + text + "». Checking if status reply...");
-
+        // 2. Check for quoted status reply
+        log("AutoStatusForward – rules passed! Checking if it's a replied status...");
         FMessageWpp quotedStatus = extractQuotedStatus(fMessageObj);
-        if (quotedStatus == null)
+        if (quotedStatus == null) {
+            log("AutoStatusForward – not a status reply (no status context found)");
             return;
+        }
 
-        log("AutoStatusForward – IS a status reply! Forwarding to " + senderJid.getPhoneNumber());
+        log("AutoStatusForward – IS a status reply! Forwarding back to " + phone);
 
         final FMessageWpp statusToSend = quotedStatus;
         final String replyText = text;
@@ -140,6 +160,15 @@ public class AutoStatusForward extends Feature {
                 }
             }
 
+            // Since it's fully populated, we can also use getOriginalKey() API
+            if (rawQuotedKey == null) {
+                FMessageWpp wrapper = new FMessageWpp(fMessageObj);
+                FMessageWpp.Key originalKey = wrapper.getOriginalKey(); // Context key
+                if (originalKey != null) {
+                    rawQuotedKey = originalKey.thisObject;
+                }
+            }
+
             if (rawQuotedKey == null)
                 return null;
 
@@ -150,9 +179,8 @@ public class AutoStatusForward extends Feature {
                     Object q = WppCore.getFMessageFromKey(rawQuotedKey);
                     if (q != null)
                         return new FMessageWpp(q);
-                    log("AutoStatusForward – status replied to but not in cache");
-                    // Still return a dummy to trigger fallback
-                    return new FMessageWpp(fMessageObj); // just return something non-null
+                    log("AutoStatusForward – replied to status but it's not in cache db.");
+                    return new FMessageWpp(fMessageObj); // fallback to trigger forwarding anyway
                 }
             }
         } catch (Throwable t) {
@@ -170,12 +198,8 @@ public class AutoStatusForward extends Feature {
         // 1. Find method returning Key that isn't the main key
         for (Method m : methods) {
             if (m.getParameterCount() == 0 && FMessageWpp.Key.TYPE.isAssignableFrom(m.getReturnType())) {
-                if (!m.getName().equals("A1J") && !m.getName().equals("A1K") && !m.getName().equals("getKey")) { // ignore
-                                                                                                                 // obvious
-                                                                                                                 // main
-                                                                                                                 // key
-                                                                                                                 // methods
-                    log("AutoStatusForward – found potential quoted key method: " + m.getName());
+                if (!m.getName().equals("A1J") && !m.getName().equals("A1K") && !m.getName().equals("getKey")) {
+                    log("AutoStatusForward – found quoted key accessor method: " + m.getName());
                     getQuotedKeyMethodCache = m;
                     m.setAccessible(true);
                     break;
@@ -189,7 +213,6 @@ public class AutoStatusForward extends Feature {
                 Class<?> type = f.getType();
                 if (type.isPrimitive() || type.getName().startsWith("java.") || type.getName().startsWith("android."))
                     continue;
-                // See if this type has a Key field
                 boolean hasKey = false;
                 for (Field nestedF : type.getDeclaredFields()) {
                     if (FMessageWpp.Key.TYPE.isAssignableFrom(nestedF.getType())) {
@@ -198,7 +221,7 @@ public class AutoStatusForward extends Feature {
                     }
                 }
                 if (hasKey) {
-                    log("AutoStatusForward – found quoted context field: " + f.getName() + " of type "
+                    log("AutoStatusForward – found quoted context info field: " + f.getName() + " of type "
                             + type.getName());
                     quotedContextFieldCache = f;
                     f.setAccessible(true);
@@ -207,7 +230,6 @@ public class AutoStatusForward extends Feature {
             }
         }
         scannedForQuoted = true;
-        log("AutoStatusForward – scanForQuotedContextInfo completed.");
     }
 
     private List<Field> getAllFields(Class<?> c) {
@@ -236,10 +258,13 @@ public class AutoStatusForward extends Feature {
         String json = prefs.getString("auto_status_forward_rules_json", "[]");
         try {
             JSONArray arr = new JSONArray(json);
-            if (arr.length() == 0)
-                return true; // catch-all
+            if (arr.length() == 0) {
+                log("AutoStatusForward – no rules set (catch-all).");
+                return true;
+            }
             if (TextUtils.isEmpty(messageText))
                 return false;
+
             String lower = messageText.trim().toLowerCase();
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject rule = arr.getJSONObject(i);
@@ -247,12 +272,18 @@ public class AutoStatusForward extends Feature {
                 String ruleText = rule.optString("text", "").trim().toLowerCase();
                 if (ruleText.isEmpty())
                     continue;
-                if ("equals".equals(type) && lower.equals(ruleText))
+
+                if ("equals".equals(type) && lower.equals(ruleText)) {
+                    log("AutoStatusForward – rule matched (EQUALS): " + ruleText);
                     return true;
-                if (!"equals".equals(type) && lower.contains(ruleText))
+                }
+                if (!"equals".equals(type) && lower.contains(ruleText)) {
+                    log("AutoStatusForward – rule matched (CONTAINS): " + ruleText);
                     return true;
+                }
             }
         } catch (Exception e) {
+            log("AutoStatusForward – matchesRules exception: " + e.getMessage());
         }
         return false;
     }
