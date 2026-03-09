@@ -15,7 +15,11 @@ import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,23 +29,12 @@ import java.util.concurrent.CompletableFuture;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
 
-/**
- * AutoStatusForward – forwards the status that a contact replied to,
- * when their reply message matches one of the configured keyword rules.
- *
- * Rules are stored as a JSON array by StatusForwardRulesActivity:
- * [{"type":"contains","text":"send me"}, {"type":"equals","text":"hello"}]
- * All matching is always case-insensitive.
- *
- * If no rules are configured, ANY reply to a status triggers the forward
- * (catch-all).
- *
- * Only messages where the QUOTED context points to a status (status@broadcast)
- * are considered – normal messages without a status quote are ignored.
- */
 public class AutoStatusForward extends Feature {
+
+    private static Field quotedContextFieldCache = null;
+    private static Method getQuotedKeyMethodCache = null;
+    private static boolean scannedForQuoted = false;
 
     public AutoStatusForward(ClassLoader loader, XSharedPreferences preferences) {
         super(loader, preferences);
@@ -49,299 +42,295 @@ public class AutoStatusForward extends Feature {
 
     @Override
     public void doHook() throws Exception {
-        if (!prefs.getBoolean("auto_status_forward", false))
+        if (FMessageWpp.TYPE == null)
             return;
+        log("AutoStatusForward – hooking all constructors of " + FMessageWpp.TYPE.getName());
 
-        // Reuse the same "MessageHandler/start" method that DndMode hooks.
-        // It is called after every incoming message is stored/processed.
-        var messageHandlerMethod = Unobfuscator.loadDndModeMethod(classLoader);
-        logDebug("AutoStatusForward – MessageHandler method: " + messageHandlerMethod);
-
-        XposedBridge.hookMethod(messageHandlerMethod, new XC_MethodHook() {
+        XposedBridge.hookAllConstructors(FMessageWpp.TYPE, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 try {
-                    handleIncomingMessage(param);
+                    prefs.reload();
+                    if (!prefs.getBoolean("auto_status_forward", false))
+                        return;
+                    handleFMessage(param.thisObject);
                 } catch (Throwable t) {
-                    logDebug("AutoStatusForward – handleIncomingMessage error: " + t.getMessage());
+                    // silent catch to prevent WA crashes
                 }
             }
         });
     }
 
-    // -------------------------------------------------------------------------
-    // Core logic
-    // -------------------------------------------------------------------------
-
-    private void handleIncomingMessage(XC_MethodHook.MethodHookParam param) throws Throwable {
-        // The FMessage object may be in param.args or in a field of param.thisObject.
-        Object fMessageObj = extractFMessage(param);
+    private void handleFMessage(Object fMessageObj) {
         if (fMessageObj == null)
             return;
+        FMessageWpp incoming;
+        try {
+            incoming = new FMessageWpp(fMessageObj);
+        } catch (Throwable t) {
+            return;
+        }
 
-        FMessageWpp incoming = new FMessageWpp(fMessageObj);
-        FMessageWpp.Key incomingKey = incoming.getKey();
-
-        // Must be a received message (not sent by me).
-        if (incomingKey == null || incomingKey.isFromMe)
+        FMessageWpp.Key key = incoming.getKey();
+        if (key == null || key.isFromMe)
+            return;
+        FMessageWpp.UserJid senderJid = key.remoteJid;
+        if (senderJid == null || senderJid.isNull() || senderJid.isGroup())
             return;
 
-        // The sending contact's JID (the one who replied).
-        FMessageWpp.UserJid senderJid = incomingKey.remoteJid;
-        if (senderJid == null || senderJid.isNull())
+        // FAST PATH: Check rules first so we don't do expensive checks if not matching
+        String text = incoming.getMessageStr();
+        if (!matchesRules(text))
             return;
-        if (senderJid.isGroup())
-            return; // Only handle 1-to-1 replies for now.
 
-        // ---- Check whether this message is a reply to a status ----
-        FMessageWpp quotedStatus = extractQuotedStatusFMessage(fMessageObj);
+        log("AutoStatusForward – text match: «" + text + "». Checking if status reply...");
+
+        FMessageWpp quotedStatus = extractQuotedStatus(fMessageObj);
         if (quotedStatus == null)
-            return; // Not a status reply – ignore.
-
-        // ---- Check keyword rules ----
-        String incomingText = incoming.getMessageStr();
-        if (!matchesRules(incomingText))
             return;
 
-        // ---- Auto-forward the replied-to status to the sender ----
+        log("AutoStatusForward – IS a status reply! Forwarding to " + senderJid.getPhoneNumber());
+
+        final FMessageWpp statusToSend = quotedStatus;
+        final String replyText = text;
+        final FMessageWpp.UserJid recipient = senderJid;
+
         CompletableFuture.runAsync(() -> {
             try {
-                forwardStatusToSender(quotedStatus, senderJid);
+                forwardStatus(statusToSend, replyText, recipient);
             } catch (Throwable t) {
-                logDebug("AutoStatusForward – forwardStatusToSender error: " + t.getMessage());
-                XposedBridge.log("AutoStatusForward error: " + t.getMessage());
+                log("AutoStatusForward – forward err: " + t);
             }
         });
     }
 
     // -------------------------------------------------------------------------
-    // Extract the FMessage object from the hook parameters
+    // Safely and quickly extract quoted status without crashing
     // -------------------------------------------------------------------------
 
-    private Object extractFMessage(XC_MethodHook.MethodHookParam param) {
-        if (param.args == null)
-            return null;
-        for (Object arg : param.args) {
-            if (arg != null && FMessageWpp.TYPE.isInstance(arg))
-                return arg;
-        }
-        // Try grabbing from fields of the declared class instance
-        if (param.thisObject != null) {
-            var field = ReflectionUtils.findFieldUsingFilterIfExists(
-                    param.thisObject.getClass(),
-                    f -> FMessageWpp.TYPE.isAssignableFrom(f.getType()));
-            if (field != null) {
-                return ReflectionUtils.getObjectField(field, param.thisObject);
-            }
-        }
-        return null;
-    }
-
-    // -------------------------------------------------------------------------
-    // Detect status reply by inspecting the quoted / context message key
-    // -------------------------------------------------------------------------
-
-    /**
-     * WhatsApp embeds the "context" (quoted message) inside FMessage fields.
-     * We look for a field that holds an object containing a message key whose
-     * remoteJid equals "status@broadcast". If found, we return the quoted
-     * FMessage (fetched from the cache), otherwise null.
-     */
-    private FMessageWpp extractQuotedStatusFMessage(Object fMessageObj) {
+    private FMessageWpp extractQuotedStatus(Object fMessageObj) {
         try {
-            Class<?> fMessageClass = fMessageObj.getClass();
-            // Walk all fields of FMessage looking for an object that contains
-            // a message key whose remoteJid is the status broadcast JID.
-            for (Field field : getAllFields(fMessageClass)) {
-                field.setAccessible(true);
-                Object fieldValue = field.get(fMessageObj);
-                if (fieldValue == null)
-                    continue;
+            if (!scannedForQuoted)
+                scanForQuotedContextInfo(fMessageObj.getClass());
 
-                // Is the field itself a message key?
-                if (FMessageWpp.Key.TYPE != null && FMessageWpp.Key.TYPE.isInstance(fieldValue)) {
-                    FMessageWpp.UserJid quotedJid = extractRemoteJidFromKey(fieldValue);
-                    if (quotedJid != null && isStatusJid(quotedJid)) {
-                        // The key might point to the original status FMessage.
-                        Object quotedFMessage = WppCore.getFMessageFromKey(fieldValue);
-                        if (quotedFMessage != null) {
-                            return new FMessageWpp(quotedFMessage);
-                        }
-                    }
-                }
+            Object rawQuotedKey = null;
 
-                // Or is the field a wrapper that contains a key?
+            // Strategy 1: Method returning Key
+            if (getQuotedKeyMethodCache != null) {
                 try {
-                    Field keyField = ReflectionUtils.findFieldUsingFilterIfExists(
-                            fieldValue.getClass(),
-                            f -> FMessageWpp.Key.TYPE != null && FMessageWpp.Key.TYPE.isAssignableFrom(f.getType()));
-                    if (keyField != null) {
-                        keyField.setAccessible(true);
-                        Object keyObj = keyField.get(fieldValue);
-                        if (keyObj != null) {
-                            FMessageWpp.UserJid quotedJid = extractRemoteJidFromKey(keyObj);
-                            if (quotedJid != null && isStatusJid(quotedJid)) {
-                                Object quotedFMessage = WppCore.getFMessageFromKey(keyObj);
-                                if (quotedFMessage != null) {
-                                    return new FMessageWpp(quotedFMessage);
-                                }
+                    rawQuotedKey = getQuotedKeyMethodCache.invoke(fMessageObj);
+                } catch (Throwable ignored) {
+                }
+            }
+
+            // Strategy 2: ContextInfo field containing Key inside it
+            if (rawQuotedKey == null && quotedContextFieldCache != null) {
+                try {
+                    Object contextInfo = quotedContextFieldCache.get(fMessageObj);
+                    if (contextInfo != null) {
+                        for (Field f : contextInfo.getClass().getDeclaredFields()) {
+                            if (FMessageWpp.Key.TYPE.isAssignableFrom(f.getType())) {
+                                f.setAccessible(true);
+                                rawQuotedKey = f.get(contextInfo);
+                                break;
                             }
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (Throwable ignored) {
+                }
+            }
+
+            if (rawQuotedKey == null)
+                return null;
+
+            FMessageWpp.Key msgKey = new FMessageWpp.Key(rawQuotedKey);
+            if (msgKey.remoteJid != null) {
+                String phone = msgKey.remoteJid.getPhoneNumber();
+                if (phone != null && (phone.equals("status") || phone.contains("broadcast"))) {
+                    Object q = WppCore.getFMessageFromKey(rawQuotedKey);
+                    if (q != null)
+                        return new FMessageWpp(q);
+                    log("AutoStatusForward – status replied to but not in cache");
+                    // Still return a dummy to trigger fallback
+                    return new FMessageWpp(fMessageObj); // just return something non-null
                 }
             }
         } catch (Throwable t) {
-            logDebug("AutoStatusForward – extractQuotedStatusFMessage: " + t.getMessage());
+            log("AutoStatusForward – extractQuotedStatus err: " + t);
         }
         return null;
     }
 
-    private FMessageWpp.UserJid extractRemoteJidFromKey(Object keyObj) {
-        try {
-            Object rawJid = XposedHelpers.getObjectField(keyObj, "A00");
-            if (rawJid == null)
-                return null;
-            return new FMessageWpp.UserJid(rawJid);
-        } catch (Throwable t) {
-            return null;
+    private synchronized void scanForQuotedContextInfo(Class<?> fMessageClass) {
+        if (scannedForQuoted)
+            return;
+        List<Field> fields = getAllFields(fMessageClass);
+        List<Method> methods = getAllMethods(fMessageClass);
+
+        // 1. Find method returning Key that isn't the main key
+        for (Method m : methods) {
+            if (m.getParameterCount() == 0 && FMessageWpp.Key.TYPE.isAssignableFrom(m.getReturnType())) {
+                if (!m.getName().equals("A1J") && !m.getName().equals("A1K") && !m.getName().equals("getKey")) { // ignore
+                                                                                                                 // obvious
+                                                                                                                 // main
+                                                                                                                 // key
+                                                                                                                 // methods
+                    log("AutoStatusForward – found potential quoted key method: " + m.getName());
+                    getQuotedKeyMethodCache = m;
+                    m.setAccessible(true);
+                    break;
+                }
+            }
         }
+
+        // 2. Find field holding ContextInfo (looks like an object with a Key inside it)
+        if (getQuotedKeyMethodCache == null) {
+            for (Field f : fields) {
+                Class<?> type = f.getType();
+                if (type.isPrimitive() || type.getName().startsWith("java.") || type.getName().startsWith("android."))
+                    continue;
+                // See if this type has a Key field
+                boolean hasKey = false;
+                for (Field nestedF : type.getDeclaredFields()) {
+                    if (FMessageWpp.Key.TYPE.isAssignableFrom(nestedF.getType())) {
+                        hasKey = true;
+                        break;
+                    }
+                }
+                if (hasKey) {
+                    log("AutoStatusForward – found quoted context field: " + f.getName() + " of type "
+                            + type.getName());
+                    quotedContextFieldCache = f;
+                    f.setAccessible(true);
+                    break;
+                }
+            }
+        }
+        scannedForQuoted = true;
+        log("AutoStatusForward – scanForQuotedContextInfo completed.");
     }
 
-    private boolean isStatusJid(FMessageWpp.UserJid jid) {
-        String phone = jid.getPhoneNumber();
-        if (phone == null)
-            return false;
-        return phone.equals("status") || phone.equals("status@broadcast");
+    private List<Field> getAllFields(Class<?> c) {
+        List<Field> list = new ArrayList<>();
+        while (c != null && c != Object.class) {
+            list.addAll(Arrays.asList(c.getDeclaredFields()));
+            c = c.getSuperclass();
+        }
+        return list;
     }
 
-    private List<Field> getAllFields(Class<?> clazz) {
-        List<Field> fields = new ArrayList<>();
-        Class<?> current = clazz;
-        while (current != null && current != Object.class) {
-            fields.addAll(Arrays.asList(current.getDeclaredFields()));
-            current = current.getSuperclass();
+    private List<Method> getAllMethods(Class<?> c) {
+        List<Method> list = new ArrayList<>();
+        while (c != null && c != Object.class) {
+            list.addAll(Arrays.asList(c.getDeclaredMethods()));
+            c = c.getSuperclass();
         }
-        return fields;
+        return list;
     }
 
     // -------------------------------------------------------------------------
-    // Keyword rule matching
+    // Rule matching
     // -------------------------------------------------------------------------
 
-    /**
-     * Returns true if the incoming message text matches at least one rule.
-     * Rules are a JSON array stored by StatusForwardRulesActivity.
-     * All comparisons are case-insensitive. Catch-all if rules list is empty.
-     */
     private boolean matchesRules(String messageText) {
-        String json = prefs.getString(
-                "auto_status_forward_rules_json", "[]");
+        String json = prefs.getString("auto_status_forward_rules_json", "[]");
         try {
-            org.json.JSONArray arr = new org.json.JSONArray(json);
+            JSONArray arr = new JSONArray(json);
             if (arr.length() == 0)
                 return true; // catch-all
             if (TextUtils.isEmpty(messageText))
                 return false;
-            String lowerMsg = messageText.trim().toLowerCase();
+            String lower = messageText.trim().toLowerCase();
             for (int i = 0; i < arr.length(); i++) {
-                org.json.JSONObject rule = arr.getJSONObject(i);
+                JSONObject rule = arr.getJSONObject(i);
                 String type = rule.optString("type", "contains").toLowerCase();
-                String text = rule.optString("text", "").trim().toLowerCase();
-                if (text.isEmpty())
+                String ruleText = rule.optString("text", "").trim().toLowerCase();
+                if (ruleText.isEmpty())
                     continue;
-                if ("equals".equals(type) && lowerMsg.equals(text))
+                if ("equals".equals(type) && lower.equals(ruleText))
                     return true;
-                if (!"equals".equals(type) && lowerMsg.contains(text))
+                if (!"equals".equals(type) && lower.contains(ruleText))
                     return true;
             }
         } catch (Exception e) {
-            logDebug("AutoStatusForward – matchesRules error: " + e.getMessage());
         }
         return false;
     }
 
     // -------------------------------------------------------------------------
-    // Forward the status to the sender using MediaComposerActivity / text intent
+    // Forward
     // -------------------------------------------------------------------------
 
-    private void forwardStatusToSender(FMessageWpp statusMessage, FMessageWpp.UserJid senderJid) throws Exception {
-        String senderJidRaw = senderJid.getPhoneRawString();
-        if (senderJidRaw == null)
+    private void forwardStatus(FMessageWpp statusMsg, String replyText, FMessageWpp.UserJid recipientJid)
+            throws Exception {
+        String jidRaw = recipientJid.getPhoneRawString();
+        if (jidRaw == null)
             return;
+        String name = WppCore.getContactName(recipientJid);
+        if (TextUtils.isEmpty(name))
+            name = recipientJid.getPhoneNumber();
+        Utils.showToast("📤 Auto-forwarding status to " + name, Toast.LENGTH_SHORT);
 
-        // Show a toast so the user knows the auto-forward fired.
-        String senderName = WppCore.getContactName(senderJid);
-        if (TextUtils.isEmpty(senderName)) {
-            senderName = senderJid.getPhoneNumber();
-        }
-        final String displayName = senderName;
-        Utils.showToast(
-                "📤 Auto-forwarding status to " + displayName,
-                Toast.LENGTH_SHORT);
-
-        boolean isMedia = statusMessage.isMediaFile();
-
-        if (!isMedia) {
-            // Text-only status
-            forwardTextStatus(statusMessage, senderJidRaw);
-        } else {
-            forwardMediaStatus(statusMessage, senderJidRaw);
-        }
+        if (statusMsg.isMediaFile())
+            forwardMediaStatus(statusMsg, jidRaw);
+        else
+            forwardTextStatus("[Status reply from " + name + "]: " + replyText, jidRaw);
     }
 
-    private void forwardTextStatus(FMessageWpp statusMessage, String recipientJidRaw) throws Exception {
-        String text = statusMessage.getMessageStr();
-        if (TextUtils.isEmpty(text)) {
-            logDebug("AutoStatusForward – text status has no text, skipping.");
-            return;
-        }
-        Intent intent = new Intent(Intent.ACTION_SEND);
-        intent.setType("text/plain");
-        intent.putExtra(Intent.EXTRA_TEXT, text);
-        // Target the recipient directly via MediaComposerActivity
+    private void forwardTextStatus(String text, String jidRaw) {
         try {
-            var clazz = Unobfuscator.getClassByName("MediaComposerActivity", classLoader);
-            intent = new Intent();
-            intent.setClassName(Utils.getApplication().getPackageName(), clazz.getName());
-            intent.putExtra("jids", new ArrayList<>(Collections.singleton(recipientJidRaw)));
+            Class<?> cls = findMediaComposerClass();
+            Intent intent = new Intent();
+            intent.setClassName(Utils.getApplication().getPackageName(), cls.getName());
+            intent.putExtra("jids", new ArrayList<>(Collections.singleton(jidRaw)));
             intent.putExtra(Intent.EXTRA_TEXT, text);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             Utils.getApplication().startActivity(intent);
         } catch (Exception e) {
-            logDebug("AutoStatusForward – forwardTextStatus fallback: " + e.getMessage());
         }
     }
 
-    private void forwardMediaStatus(FMessageWpp statusMessage, String recipientJidRaw) throws Exception {
-        var file = statusMessage.getMediaFile();
+    private void forwardMediaStatus(FMessageWpp status, String jidRaw) {
+        var file = status.getMediaFile();
         if (file == null || !file.exists()) {
-            logDebug("AutoStatusForward – media file not cached, cannot auto-forward.");
-            Utils.showToast("⚠️ Status media not cached yet, cannot auto-forward.", Toast.LENGTH_LONG);
+            Utils.showToast("⚠️ Status media not cached.", Toast.LENGTH_LONG);
             return;
         }
-
-        Uri mediaUri;
         try {
-            String authority = Utils.getApplication().getPackageName() + ".fileprovider";
-            mediaUri = FileProvider.getUriForFile(Utils.getApplication(), authority, file);
-        } catch (IllegalArgumentException e) {
-            mediaUri = Uri.fromFile(file);
+            Uri uri;
+            try {
+                uri = FileProvider.getUriForFile(Utils.getApplication(),
+                        Utils.getApplication().getPackageName() + ".fileprovider", file);
+            } catch (Exception e) {
+                uri = Uri.fromFile(file);
+            }
+            Class<?> cls = findMediaComposerClass();
+            Intent intent = new Intent();
+            intent.setClassName(Utils.getApplication().getPackageName(), cls.getName());
+            intent.putExtra("jids", new ArrayList<>(Collections.singleton(jidRaw)));
+            intent.putExtra(Intent.EXTRA_STREAM, new ArrayList<>(Collections.singleton(uri)));
+            String caption = status.getMessageStr();
+            if (!TextUtils.isEmpty(caption))
+                intent.putExtra(Intent.EXTRA_TEXT, caption);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            Utils.getApplication().startActivity(intent);
+        } catch (Exception e) {
         }
+    }
 
-        Intent intent = new Intent();
-        var clazz = Unobfuscator.getClassByName("MediaComposerActivity", classLoader);
-        intent.setClassName(Utils.getApplication().getPackageName(), clazz.getName());
-        intent.putExtra("jids", new ArrayList<>(Collections.singleton(recipientJidRaw)));
-        intent.putExtra(Intent.EXTRA_STREAM, new ArrayList<>(Collections.singleton(mediaUri)));
-
-        // Include caption if present
-        String caption = statusMessage.getMessageStr();
-        if (!TextUtils.isEmpty(caption)) {
-            intent.putExtra(Intent.EXTRA_TEXT, caption);
+    private Class<?> findMediaComposerClass() throws Exception {
+        try {
+            return Unobfuscator.getClassByName("MediaComposerActivity", classLoader);
+        } catch (Exception ignored) {
         }
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-        Utils.getApplication().startActivity(intent);
+        for (String c : new String[] { "com.whatsapp.mediacomposer.MediaComposerActivity",
+                "com.whatsapp.compose.MediaComposerActivity" }) {
+            try {
+                return classLoader.loadClass(c);
+            } catch (ClassNotFoundException ignored) {
+            }
+        }
+        throw new Exception("MediaComposerActivity not found");
     }
 
     @NonNull
