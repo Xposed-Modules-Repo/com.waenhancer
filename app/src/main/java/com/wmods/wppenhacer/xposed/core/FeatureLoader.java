@@ -61,6 +61,7 @@ import com.wmods.wppenhacer.xposed.features.media.DownloadViewOnce;
 import com.wmods.wppenhacer.xposed.features.media.MediaPreview;
 import com.wmods.wppenhacer.xposed.features.media.MediaQuality;
 import com.wmods.wppenhacer.xposed.features.media.StatusDownload;
+import com.wmods.wppenhacer.xposed.features.media.AutoStatusForward;
 import com.wmods.wppenhacer.xposed.features.others.ActivityController;
 import com.wmods.wppenhacer.xposed.features.others.BackupRestore;
 import com.wmods.wppenhacer.xposed.features.others.AudioTranscript;
@@ -397,7 +398,8 @@ public class FeatureLoader {
                 CallRecording.class,
                 BackupRestore.class,
                 Spy.class,
-                RecoverDeleteForMe.class
+                RecoverDeleteForMe.class,
+                AutoStatusForward.class
         };
         XposedBridge.log("Loading Plugins");
         var executorService = Executors.newWorkStealingPool(Math.min(Runtime.getRuntime().availableProcessors(), 4));

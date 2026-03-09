@@ -95,6 +95,11 @@
             android:parentActivityName=".activities.MainActivity" />
 
         <activity
+            android:name=".activities.StatusForwardRulesActivity"
+            android:theme="@style/Theme.Material3.DynamicColors.DayNight.NoActionBar"
+            android:parentActivityName=".activities.MainActivity" />
+
+        <activity
             android:name=".activities.SearchActivity"
             android:theme="@style/AppTheme"
             android:parentActivityName=".activities.MainActivity"

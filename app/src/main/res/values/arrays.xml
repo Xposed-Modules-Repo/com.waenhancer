@@ -259,4 +259,9 @@
         <item>3</item> <!-- Include / Whitelist -->
     </string-array>
 
+    <string-array name="rule_type_entries">
+        <item>Contains</item>
+        <item>Equals</item>
+    </string-array>
+
 </resources>

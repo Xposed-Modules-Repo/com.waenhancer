@@ -484,4 +484,19 @@
 
     <string name="warning_restore">When restoring the backup all messages after the backup will be lost, are you sure you want to continue?</string>
     <string name="force_restore_backup_experimental">Force Restore Backup (Experimental)</string>
+
+    <!-- Auto Status Forward -->
+    <string name="auto_status_forward_title">Auto Status Forward</string>
+    <string name="auto_status_forward">Enable Auto Status Forward</string>
+    <string name="auto_status_forward_sum">Automatically forward your status to a contact when they reply to it with a matching keyword. Leave rules empty to forward on any reply.</string>
+    <string name="auto_status_forward_rules">Keyword Rules</string>
+    <string name="add_rule">Add Rule</string>
+    <string name="delete_rule">Delete Rule</string>
+    <string name="delete_rule_confirm">Delete this rule?</string>
+    <string name="delete_rules_confirm">Delete %d selected rules?</string>
+    <string name="rules_selected">selected</string>
+    <string name="rules_deleted">Rules deleted</string>
+    <string name="rule_keyword_hint">Enter keyword…</string>
+    <string name="rules_summary_empty">Tap to add keyword rules (catch-all if empty)</string>
+    <string name="rules_summary_count">%d rule(s) configured</string>
 </resources>

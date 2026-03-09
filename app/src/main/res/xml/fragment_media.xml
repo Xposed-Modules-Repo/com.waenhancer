@@ -37,6 +37,22 @@
 
     <PreferenceCategory
         app:iconSpaceReserved="false"
+        app:title="@string/auto_status_forward_title">
+
+        <rikka.material.preference.MaterialSwitchPreference
+            app:key="auto_status_forward"
+            app:summary="@string/auto_status_forward_sum"
+            app:title="@string/auto_status_forward" />
+
+        <com.wmods.wppenhacer.preference.StatusForwardRulesPreference
+            app:dependency="auto_status_forward"
+            app:key="auto_status_forward_rules_pref"
+            app:title="@string/auto_status_forward_rules" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
         app:title="@string/title_video">
 
         <com.wmods.wppenhacer.preference.FloatSeekBarPreference
