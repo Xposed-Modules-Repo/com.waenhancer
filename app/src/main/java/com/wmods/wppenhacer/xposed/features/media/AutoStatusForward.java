@@ -2,6 +2,8 @@ package com.wmods.wppenhacer.xposed.features.media;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.widget.Toast;
 
@@ -48,65 +50,42 @@ public class AutoStatusForward extends Feature {
 
     @Override
     public void doHook() throws Exception {
-        log("AutoStatusForward – hooking loadReceiptMethod (fully populated incoming messages)");
-        Method receiptMethod = Unobfuscator.loadReceiptMethod(classLoader);
-
-        XposedBridge.hookMethod(receiptMethod, new XC_MethodHook() {
+        log("AutoStatusForward – hooking all constructors of " + FMessageWpp.TYPE.getName());
+        XposedBridge.hookAllConstructors(FMessageWpp.TYPE, new XC_MethodHook() {
             @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                log("AutoStatusForward - receiptMethod triggered unconditionally!");
-                try {
-                    prefs.reload();
-                    boolean isEnabled = prefs.getBoolean("auto_status_forward", false);
-                    log("AutoStatusForward - isEnabled: " + isEnabled);
-                    if (!isEnabled)
-                        return;
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                super.afterHookedMethod(param);
+                if (!prefs.getBoolean("auto_status_forward", false))
+                    return;
 
-                    StringBuilder types = new StringBuilder();
-                    for (int i = 0; i < param.args.length; i++) {
-                        Object obj = param.args[i];
-                        types.append("arg[").append(i).append("]=")
-                                .append(obj != null ? obj.getClass().getName() : "null").append("; ");
-                        if (obj instanceof String) {
-                            types.append("(").append(obj).append("); ");
-                        }
-                    }
-                    log("AutoStatusForward - args: " + types.toString());
+                Object fMessageRaw = param.thisObject;
+                if (fMessageRaw == null)
+                    return;
 
-                    if (param.args.length > 4 && param.args[4] instanceof String) {
-                        log("AutoStatusForward - receiptMethod invoked with param 4 = " + param.args[4]);
-                    }
-
-                    String messageId = param.args.length > 5 && param.args[5] instanceof String ? (String) param.args[5]
-                            : null;
-                    Object remoteJidObj = param.args.length > 2 ? param.args[2] : null;
-
-                    if (messageId == null || remoteJidObj == null) {
-                        return;
-                    }
-
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
                     try {
-                        FMessageWpp.UserJid remoteJid = new FMessageWpp.UserJid(remoteJidObj);
-                        FMessageWpp.Key key = new FMessageWpp.Key(messageId, remoteJid, false);
-                        FMessageWpp fMessage = key.getFMessage();
+                        FMessageWpp fMessage = new FMessageWpp(fMessageRaw);
+                        FMessageWpp.Key key = fMessage.getKey();
 
-                        if (fMessage != null) {
-                            log("AutoStatusForward - Fetched message from receipt ID: " + messageId);
-                            // Ensure the hook doesn't re-process the exact same message repeatedly
-                            String dupKey = "last_processed_" + messageId;
-                            if (prefs.getBoolean(dupKey, false))
-                                return;
-                            prefs.edit().putBoolean(dupKey, true).apply();
+                        if (key == null || key.isFromMe)
+                            return;
 
-                            handleFMessage(fMessage.getObject());
-                        }
+                        String messageId = key.messageID;
+                        if (messageId == null)
+                            return;
+
+                        String dupKey = "last_processed_" + messageId;
+                        if (WppCore.getPrivBoolean(dupKey, false))
+                            return;
+                        WppCore.setPrivBoolean(dupKey, true);
+
+                        log("AutoStatusForward - intercepted FMessage constructor! ID: " + messageId);
+                        handleFMessage(fMessageRaw);
+
                     } catch (Throwable t) {
-                        log("AutoStatusForward - err reconstructing key: " + t);
+                        log("AutoStatusForward – Delayed constructor check err: " + t);
                     }
-
-                } catch (Throwable t) {
-                    log("AutoStatusForward – hook err: " + t);
-                }
+                }, 1500); // 1.5 seconds delay allows text extraction
             }
         });
     }
@@ -165,50 +144,59 @@ public class AutoStatusForward extends Feature {
     // -------------------------------------------------------------------------
 
     private FMessageWpp extractQuotedStatus(Object fMessageObj) {
+        log("AutoStatusForward – extractQuotedStatus starting");
         try {
             if (!scannedForQuoted)
                 scanForQuotedContextInfo(fMessageObj.getClass());
 
             Object rawQuotedKey = null;
 
-            // Strategy 1: Method returning Key
-            if (getQuotedKeyMethodCache != null) {
-                try {
-                    rawQuotedKey = getQuotedKeyMethodCache.invoke(fMessageObj);
-                } catch (Throwable ignored) {
-                }
-            }
+            // Strategy 1 (Methods returning Key) was too unreliable due to obfuscation
+            // matching the main getKey() method.
 
             // Strategy 2: ContextInfo field containing Key inside it
             if (rawQuotedKey == null && quotedContextFieldCache != null) {
                 try {
                     Object contextInfo = quotedContextFieldCache.get(fMessageObj);
+                    log("AutoStatusForward – extractQuotedStatus Strategy 2 contextInfo: " + contextInfo);
                     if (contextInfo != null) {
-                        for (Field f : contextInfo.getClass().getDeclaredFields()) {
+                        for (Field f : getAllFields(contextInfo.getClass())) {
                             if (FMessageWpp.Key.TYPE.isAssignableFrom(f.getType())) {
                                 f.setAccessible(true);
                                 rawQuotedKey = f.get(contextInfo);
-                                break;
+                                log("AutoStatusForward – extractQuotedStatus Strategy 2 rawQuotedKey from field: "
+                                        + rawQuotedKey);
+                                if (rawQuotedKey != null) {
+                                    break;
+                                }
                             }
                         }
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    log("AutoStatusForward – extractQuotedStatus Strategy 2 err: " + t);
                 }
+            } else if (rawQuotedKey == null) {
+                log("AutoStatusForward – extractQuotedStatus Strategy 2 skipped (field null)");
             }
 
             // Since it's fully populated, we can also use getOriginalKey() API
             if (rawQuotedKey == null) {
                 FMessageWpp wrapper = new FMessageWpp(fMessageObj);
                 FMessageWpp.Key originalKey = wrapper.getOriginalKey(); // Context key
+                log("AutoStatusForward – extractQuotedStatus Strategy 3 originalKey: " + originalKey);
                 if (originalKey != null) {
                     rawQuotedKey = originalKey.thisObject;
                 }
             }
 
-            if (rawQuotedKey == null)
+            if (rawQuotedKey == null) {
+                log("AutoStatusForward – extractQuotedStatus unable to find rawQuotedKey");
                 return null;
+            }
 
             FMessageWpp.Key msgKey = new FMessageWpp.Key(rawQuotedKey);
+            log("AutoStatusForward – extractQuotedStatus msgKey remoteJid: "
+                    + (msgKey.remoteJid != null ? msgKey.remoteJid.getPhoneNumber() : "null"));
             if (msgKey.remoteJid != null) {
                 String phone = msgKey.remoteJid.getPhoneNumber();
                 if (phone != null && (phone.equals("status") || phone.contains("broadcast"))) {
@@ -231,38 +219,27 @@ public class AutoStatusForward extends Feature {
         List<Field> fields = getAllFields(fMessageClass);
         List<Method> methods = getAllMethods(fMessageClass);
 
-        // 1. Find method returning Key that isn't the main key
-        for (Method m : methods) {
-            if (m.getParameterCount() == 0 && FMessageWpp.Key.TYPE.isAssignableFrom(m.getReturnType())) {
-                if (!m.getName().equals("A1J") && !m.getName().equals("A1K") && !m.getName().equals("getKey")) {
-                    log("AutoStatusForward – found quoted key accessor method: " + m.getName());
-                    getQuotedKeyMethodCache = m;
-                    m.setAccessible(true);
+        // 1. Scanning for method returning Key (Strategy 1) removed because it
+        // erroneously found the obfuscated `getKey()` method.
+
+        // 2. Find field holding ContextInfo (looks like an object with a Key inside it)
+        for (Field f : fields) {
+            Class<?> type = f.getType();
+            if (type.isPrimitive() || type.getName().startsWith("java.") || type.getName().startsWith("android."))
+                continue;
+            boolean hasKey = false;
+            for (Field nestedF : getAllFields(type)) {
+                if (FMessageWpp.Key.TYPE.isAssignableFrom(nestedF.getType())) {
+                    hasKey = true;
                     break;
                 }
             }
-        }
-
-        // 2. Find field holding ContextInfo (looks like an object with a Key inside it)
-        if (getQuotedKeyMethodCache == null) {
-            for (Field f : fields) {
-                Class<?> type = f.getType();
-                if (type.isPrimitive() || type.getName().startsWith("java.") || type.getName().startsWith("android."))
-                    continue;
-                boolean hasKey = false;
-                for (Field nestedF : type.getDeclaredFields()) {
-                    if (FMessageWpp.Key.TYPE.isAssignableFrom(nestedF.getType())) {
-                        hasKey = true;
-                        break;
-                    }
-                }
-                if (hasKey) {
-                    log("AutoStatusForward – found quoted context info field: " + f.getName() + " of type "
-                            + type.getName());
-                    quotedContextFieldCache = f;
-                    f.setAccessible(true);
-                    break;
-                }
+            if (hasKey) {
+                log("AutoStatusForward – found quoted context info field: " + f.getName() + " of type "
+                        + type.getName());
+                quotedContextFieldCache = f;
+                f.setAccessible(true);
+                break;
             }
         }
         scannedForQuoted = true;
