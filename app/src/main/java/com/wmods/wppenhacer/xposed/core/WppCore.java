@@ -109,6 +109,27 @@ public class WppCore {
             }
         });
 
+        // Hook A00 to capture what real 1Ks/0Fq objects look like during a user send
+        var a00Method = ReflectionUtils.findMethodUsingFilterIfExists(actionUser,
+                (method) -> method.getName().equals("A00") && method.getParameterCount() == 2);
+        if (a00Method != null) {
+            XposedBridge.hookMethod(a00Method, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    Object oneKs = param.args[0];
+                    if (oneKs != null) {
+                        for (var f : oneKs.getClass().getDeclaredFields()) {
+                            f.setAccessible(true);
+                            Object val = f.get(oneKs);
+                            XposedBridge.log("WppCore.A00-hook: 1Ks." + f.getName() + " = " + val
+                                    + " [class=" + (val == null ? "null" : val.getClass().getName()) + "]");
+                        }
+                    }
+                    XposedBridge.log("WppCore.A00-hook: message arg = " + param.args[1]);
+                }
+            });
+        }
+
         // CachedMessageStore
         cachedMessageStoreKey = Unobfuscator.loadCachedMessageStoreKey(loader);
         XposedBridge.hookAllConstructors(cachedMessageStoreKey.getDeclaringClass(), new XC_MethodHook() {
@@ -215,43 +236,113 @@ public class WppCore {
         return true;
     }
 
-    public static void sendMessage(String number, String message) {
+    public static void sendMessage(Object userJidRaw, String message) {
         try {
-            var senderMethod = ReflectionUtils.findMethodUsingFilterIfExists(actionUser,
-                    (method) -> List.class.isAssignableFrom(method.getReturnType())
-                            && ReflectionUtils.findIndexOfType(method.getParameterTypes(), String.class) != -1);
-
-            if (senderMethod == null) {
-                XposedBridge.log("WppCore.sendMessage - senderMethod is null. Dumping actionUser methods:");
-                for (java.lang.reflect.Method m : actionUser.getDeclaredMethods()) {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(m.getName()).append("(");
-                    for (Class<?> p : m.getParameterTypes())
-                        sb.append(p.getSimpleName()).append(", ");
-                    sb.append(") -> ").append(m.getReturnType().getSimpleName());
-                    XposedBridge.log("   " + sb.toString());
-                }
-            } else {
-                var userJid = createUserJid(number + "@s.whatsapp.net");
-                if (userJid == null) {
-                    Utils.showToast("UserJID not found", Toast.LENGTH_SHORT);
-                    return;
-                }
-                var newObject = new Object[senderMethod.getParameterCount()];
-                for (int i = 0; i < newObject.length; i++) {
-                    var param = senderMethod.getParameterTypes()[i];
-                    newObject[i] = ReflectionUtils.getDefaultValue(param);
-                }
-                var index = ReflectionUtils.findIndexOfType(senderMethod.getParameterTypes(), String.class);
-                newObject[index] = message;
-                var index2 = ReflectionUtils.findIndexOfType(senderMethod.getParameterTypes(), List.class);
-                newObject[index2] = Collections.singletonList(userJid);
-                senderMethod.invoke(getActionUser(), newObject);
-                Utils.showToast("Message sent to " + number, Toast.LENGTH_SHORT);
+            // Get the JID raw string from the Jid object
+            String jidRawString = (String) XposedHelpers.callMethod(userJidRaw, "getRawString");
+            if (jidRawString == null) {
+                XposedBridge.log("WppCore.sendMessage - could not get rawString from jid: " + userJidRaw);
+                Utils.showToast("Error: could not find JID", Toast.LENGTH_SHORT);
+                return;
             }
+            // Strip device suffix if LID: e.g. "4306.0:0@lid" -> "4306@lid"
+            jidRawString = jidRawString.replaceFirst("\\.[\\d:]+@", "@");
+            XposedBridge.log("WppCore.sendMessage - jidRawString: " + jidRawString);
+
+            sendMessage(jidRawString, message);
         } catch (Exception e) {
-            Utils.showToast("Error in sending message:" + e.getMessage(), Toast.LENGTH_SHORT);
-            XposedBridge.log(e);
+            XposedBridge.log("WppCore.sendMessage(Object) failed: " + e);
+            Utils.showToast("Error in sending message: " + e.getMessage(), Toast.LENGTH_SHORT);
+        }
+    }
+
+    /**
+     * Sends a message headlessly via WhatsApp notification RemoteInput reply.
+     * 
+     * @param contactName The display name of the contact as shown in WA
+     *                    notification title.
+     * @param message     The text to send.
+     */
+    @SuppressWarnings("deprecation")
+    public static boolean sendMessageViaNotification(String contactName, String message) {
+        try {
+            android.app.NotificationManager nm = (android.app.NotificationManager) Utils.getApplication()
+                    .getSystemService(Context.NOTIFICATION_SERVICE);
+            android.service.notification.StatusBarNotification[] notifications = nm.getActiveNotifications();
+
+            for (android.service.notification.StatusBarNotification sbn : notifications) {
+                if (!sbn.getPackageName().contains("whatsapp"))
+                    continue;
+                android.app.Notification notif = sbn.getNotification();
+                if (notif.actions == null)
+                    continue;
+
+                // Match by android.title (contact display name)
+                String title = notif.extras.getString("android.title");
+                if (title == null || !title.equalsIgnoreCase(contactName))
+                    continue;
+
+                for (android.app.Notification.Action action : notif.actions) {
+                    if (action.getRemoteInputs() != null && action.getRemoteInputs().length > 0) {
+                        android.app.RemoteInput[] remoteInputs = action.getRemoteInputs();
+                        android.content.Intent fillIn = new android.content.Intent();
+                        android.os.Bundle results = new android.os.Bundle();
+                        for (android.app.RemoteInput ri : remoteInputs) {
+                            results.putCharSequence(ri.getResultKey(), message);
+                        }
+                        android.app.RemoteInput.addResultsToIntent(remoteInputs, fillIn, results);
+                        action.actionIntent.send(Utils.getApplication(), 0, fillIn);
+                        XposedBridge.log(
+                                "WppCore.sendMessageViaNotification - sent to [" + contactName + "] via RemoteInput!");
+                        return true;
+                    }
+                }
+            }
+            XposedBridge.log("WppCore.sendMessageViaNotification - no WA notification with title=[" + contactName
+                    + "]. Total=" + notifications.length);
+        } catch (Exception e) {
+            XposedBridge.log("WppCore.sendMessageViaNotification error: " + e);
+        }
+        return false;
+    }
+
+    public static void sendMessage(String jidOrNumber, String message) {
+        try {
+            android.app.NotificationManager nm = (android.app.NotificationManager) Utils.getApplication()
+                    .getSystemService(Context.NOTIFICATION_SERVICE);
+            android.service.notification.StatusBarNotification[] notifications = nm.getActiveNotifications();
+
+            for (android.service.notification.StatusBarNotification sbn : notifications) {
+                if (!sbn.getPackageName().contains("whatsapp"))
+                    continue;
+                android.app.Notification notif = sbn.getNotification();
+                if (notif.actions == null)
+                    continue;
+                String tag = sbn.getTag() != null ? sbn.getTag() : "";
+                String extras = notif.extras.toString();
+                String bareId = jidOrNumber.contains("@") ? jidOrNumber.substring(0, jidOrNumber.indexOf('@'))
+                        : jidOrNumber;
+                if (!tag.contains(bareId) && !extras.contains(bareId))
+                    continue;
+
+                for (android.app.Notification.Action action : notif.actions) {
+                    if (action.getRemoteInputs() != null && action.getRemoteInputs().length > 0) {
+                        android.app.RemoteInput[] remoteInputs = action.getRemoteInputs();
+                        android.content.Intent fillIn = new android.content.Intent();
+                        android.os.Bundle results = new android.os.Bundle();
+                        for (android.app.RemoteInput ri : remoteInputs) {
+                            results.putCharSequence(ri.getResultKey(), message);
+                        }
+                        android.app.RemoteInput.addResultsToIntent(remoteInputs, fillIn, results);
+                        action.actionIntent.send(Utils.getApplication(), 0, fillIn);
+                        XposedBridge.log("WppCore.sendMessage - sent via RemoteInput (jid match)!");
+                        return;
+                    }
+                }
+            }
+            XposedBridge.log("WppCore.sendMessage - no matching WA notification for jid=" + jidOrNumber);
+        } catch (Exception e) {
+            XposedBridge.log("WppCore.sendMessage error: " + e);
         }
     }
 

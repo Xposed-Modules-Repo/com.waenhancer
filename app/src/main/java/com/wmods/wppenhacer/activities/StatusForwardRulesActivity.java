@@ -187,7 +187,10 @@ public class StatusForwardRulesActivity extends AppCompatActivity
                 JSONObject obj = arr.getJSONObject(i);
                 rules.add(new StatusForwardRule(
                         obj.optString("type", StatusForwardRule.TYPE_CONTAINS),
-                        obj.optString("text", "")));
+                        obj.optString("text", ""),
+                        obj.optBoolean("applyText", true),
+                        obj.optBoolean("applyMedia", true),
+                        obj.optBoolean("applyVoice", false)));
             }
         } catch (Exception ignored) {
         }
@@ -200,6 +203,9 @@ public class StatusForwardRulesActivity extends AppCompatActivity
                 JSONObject obj = new JSONObject();
                 obj.put("type", rule.type);
                 obj.put("text", rule.text.trim());
+                obj.put("applyText", rule.applyText);
+                obj.put("applyMedia", rule.applyMedia);
+                obj.put("applyVoice", rule.applyVoice);
                 arr.put(obj);
             } catch (Exception ignored) {
             }

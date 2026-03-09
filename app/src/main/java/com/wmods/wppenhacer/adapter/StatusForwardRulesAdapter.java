@@ -118,6 +118,9 @@ public class StatusForwardRulesAdapter
         final Spinner spinner;
         final ImageButton btnDelete;
         final CheckBox checkBox;
+        final CheckBox cbApplyText;
+        final CheckBox cbApplyMedia;
+        final CheckBox cbApplyVoice;
         TextWatcher currentWatcher;
 
         RuleViewHolder(@NonNull View v) {
@@ -126,6 +129,9 @@ public class StatusForwardRulesAdapter
             spinner = v.findViewById(R.id.rule_type_spinner);
             btnDelete = v.findViewById(R.id.btn_delete_rule);
             checkBox = v.findViewById(R.id.rule_checkbox);
+            cbApplyText = v.findViewById(R.id.cb_apply_text);
+            cbApplyMedia = v.findViewById(R.id.cb_apply_media);
+            cbApplyVoice = v.findViewById(R.id.cb_apply_voice);
         }
 
         void bind(StatusForwardRule rule, int pos) {
@@ -171,11 +177,37 @@ public class StatusForwardRulesAdapter
             };
             editText.addTextChangedListener(currentWatcher);
 
+            // ---- Toggles ----
+            cbApplyText.setOnCheckedChangeListener(null);
+            cbApplyText.setChecked(rule.applyText);
+            cbApplyText.setOnCheckedChangeListener((btn, checked) -> {
+                rule.applyText = checked;
+                listener.onRuleChanged();
+            });
+
+            cbApplyMedia.setOnCheckedChangeListener(null);
+            cbApplyMedia.setChecked(rule.applyMedia);
+            cbApplyMedia.setOnCheckedChangeListener((btn, checked) -> {
+                rule.applyMedia = checked;
+                listener.onRuleChanged();
+            });
+
+            // Voice is practically disabled, but sync data just in case
+            cbApplyVoice.setOnCheckedChangeListener(null);
+            cbApplyVoice.setChecked(rule.applyVoice);
+            cbApplyVoice.setOnCheckedChangeListener((btn, checked) -> {
+                rule.applyVoice = checked;
+                listener.onRuleChanged();
+            });
+
             // ---- Selection mode visibility ----
             checkBox.setVisibility(isSelectionMode ? View.VISIBLE : View.GONE);
             btnDelete.setVisibility(isSelectionMode ? View.GONE : View.VISIBLE);
             spinner.setEnabled(!isSelectionMode);
             editText.setEnabled(!isSelectionMode);
+            cbApplyText.setEnabled(!isSelectionMode);
+            cbApplyMedia.setEnabled(!isSelectionMode);
+            // cbApplyVoice stays disabled as it's 'coming soon' in layout XML
 
             if (isSelectionMode) {
                 checkBox.setOnCheckedChangeListener(null);

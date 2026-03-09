@@ -6,9 +6,20 @@ public class StatusForwardRule {
 
     public String type;
     public String text;
+    public boolean applyText = true;
+    public boolean applyMedia = true;
+    public boolean applyVoice = false;
 
     public StatusForwardRule(String type, String text) {
         this.type = type;
         this.text = text;
+    }
+
+    public StatusForwardRule(String type, String text, boolean applyText, boolean applyMedia, boolean applyVoice) {
+        this.type = type;
+        this.text = text;
+        this.applyText = applyText;
+        this.applyMedia = applyMedia;
+        this.applyVoice = applyVoice;
     }
 }

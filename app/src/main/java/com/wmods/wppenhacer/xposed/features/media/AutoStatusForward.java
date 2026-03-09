@@ -141,29 +141,41 @@ public class AutoStatusForward extends Feature {
         log("AutoStatusForward – incoming msg from " + phone + " [text: «" + text + "»]");
 
         // 1. Rule matching
-        boolean ruleMatches = matchesRules(text);
-        if (!ruleMatches) {
+        com.wmods.wppenhacer.model.StatusForwardRule matchedRule = matchesRules(text);
+        if (matchedRule == null) {
             log("AutoStatusForward – did not match any text rule, skipping.");
             return;
         }
 
         // 2. Check for quoted status reply
-        log("AutoStatusForward – rules passed! Checking if it's a replied status...");
         FMessageWpp quotedStatus = extractQuotedStatus(fMessageObj);
         if (quotedStatus == null) {
-            log("AutoStatusForward – not a status reply (no status context found)");
             return;
         }
 
-        log("AutoStatusForward – IS a status reply! Forwarding back to " + phone);
+        // 3. Verify rule toggles against status type
+        boolean isVoiceNote = quotedStatus.getMediaType() == 2;
+        boolean isMedia = quotedStatus.isMediaFile();
+
+        if (isVoiceNote && !matchedRule.applyVoice) {
+            log("AutoStatusForward – matched rule but applyVoice is false. Skipping voice status.");
+            return;
+        } else if (isMedia && !isVoiceNote && !matchedRule.applyMedia) {
+            log("AutoStatusForward – matched rule but applyMedia is false. Skipping media status.");
+            return;
+        } else if (!isMedia && !isVoiceNote && !matchedRule.applyText) {
+            log("AutoStatusForward – matched rule but applyText is false. Skipping text status.");
+            return;
+        }
 
         final FMessageWpp statusToSend = quotedStatus;
         final String replyText = text;
         final FMessageWpp.UserJid recipient = senderJid;
+        final Object incomingMsg = fMessageObj;
 
         CompletableFuture.runAsync(() -> {
             try {
-                forwardStatus(statusToSend, replyText, recipient);
+                forwardStatus(statusToSend, replyText, recipient, incomingMsg);
             } catch (Throwable t) {
                 log("AutoStatusForward – forward err: " + t);
             }
@@ -298,45 +310,53 @@ public class AutoStatusForward extends Feature {
     // Rule matching
     // -------------------------------------------------------------------------
 
-    private boolean matchesRules(String messageText) {
+    private com.wmods.wppenhacer.model.StatusForwardRule matchesRules(String messageText) {
         String json = prefs.getString("auto_status_forward_rules_json", "[]");
         try {
             JSONArray arr = new JSONArray(json);
             if (arr.length() == 0) {
                 log("AutoStatusForward – no rules set (catch-all).");
-                return true;
+                return new com.wmods.wppenhacer.model.StatusForwardRule("contains", "", true, true, false);
             }
             if (TextUtils.isEmpty(messageText))
-                return false;
+                return null;
 
             String lower = messageText.trim().toLowerCase();
             for (int i = 0; i < arr.length(); i++) {
-                JSONObject rule = arr.getJSONObject(i);
-                String type = rule.optString("type", "contains").toLowerCase();
-                String ruleText = rule.optString("text", "").trim().toLowerCase();
+                JSONObject ruleObj = arr.getJSONObject(i);
+                String type = ruleObj.optString("type", "contains").toLowerCase();
+                String ruleText = ruleObj.optString("text", "").trim().toLowerCase();
+
+                boolean applyText = ruleObj.optBoolean("applyText", true);
+                boolean applyMedia = ruleObj.optBoolean("applyMedia", true);
+                boolean applyVoice = ruleObj.optBoolean("applyVoice", false);
+
                 if (ruleText.isEmpty())
                     continue;
 
                 if ("equals".equals(type) && lower.equals(ruleText)) {
                     log("AutoStatusForward – rule matched (EQUALS): " + ruleText);
-                    return true;
+                    return new com.wmods.wppenhacer.model.StatusForwardRule(type, ruleText, applyText, applyMedia,
+                            applyVoice);
                 }
                 if (!"equals".equals(type) && lower.contains(ruleText)) {
                     log("AutoStatusForward – rule matched (CONTAINS): " + ruleText);
-                    return true;
+                    return new com.wmods.wppenhacer.model.StatusForwardRule(type, ruleText, applyText, applyMedia,
+                            applyVoice);
                 }
             }
         } catch (Exception e) {
             log("AutoStatusForward – matchesRules exception: " + e.getMessage());
         }
-        return false;
+        return null;
     }
 
     // -------------------------------------------------------------------------
     // Forward
     // -------------------------------------------------------------------------
 
-    private void forwardStatus(FMessageWpp statusMsg, String replyText, FMessageWpp.UserJid recipientJid)
+    private void forwardStatus(FMessageWpp statusMsg, String replyText, FMessageWpp.UserJid recipientJid,
+            Object incomingMsg)
             throws Exception {
         String jidRaw = recipientJid.getPhoneRawString();
         if (jidRaw == null)
@@ -344,23 +364,43 @@ public class AutoStatusForward extends Feature {
         String name = WppCore.getContactName(recipientJid);
         if (TextUtils.isEmpty(name))
             name = recipientJid.getPhoneNumber();
-        Utils.showToast("📤 Auto-forwarding status to " + name, Toast.LENGTH_SHORT);
 
-        if (statusMsg.isMediaFile())
+        boolean isVoiceNote = statusMsg.getMediaType() == 2;
+
+        if (statusMsg.isMediaFile() && !isVoiceNote) {
             forwardMediaStatus(statusMsg, jidRaw);
-        else
-            forwardTextStatus("[Status reply from " + name + "]: " + replyText, recipientJid);
+        } else {
+            // Forward the actual status text content if available, else use reply text.
+            // For voice notes, indicate it's a voice status since we can't send the audio
+            // file natively yet.
+            String statusText;
+            if (isVoiceNote) {
+                statusText = "[Voice Status reply]";
+            } else {
+                statusText = statusMsg.getMessageStr();
+                if (TextUtils.isEmpty(statusText)) {
+                    statusText = replyText;
+                }
+            }
+            forwardTextStatus(statusText, recipientJid, name);
+        }
     }
 
-    private void forwardTextStatus(String text, FMessageWpp.UserJid recipient) {
+    private void forwardTextStatus(String text, FMessageWpp.UserJid recipient, String contactName) {
         try {
-            String phoneNumber = recipient.getPhoneNumber();
-            if (phoneNumber != null) {
-                // WppCore.sendMessage sends silently in the background without launching any
-                // Activity
-                WppCore.sendMessage(phoneNumber, text);
+            // Try to send via WA notification RemoteInput (matched by contact display name)
+            boolean sent = WppCore.sendMessageViaNotification(contactName, text);
+            if (sent) {
+                Utils.showToast("✅ Message sent automatically", Toast.LENGTH_SHORT);
             } else {
-                log("AutoStatusForward - forwardTextStatus failed, no phone number for " + recipient);
+                // Fallback: try via JID-based method
+                Object rawJidObj = recipient.phoneJid != null ? recipient.phoneJid : recipient.userJid;
+                if (rawJidObj != null) {
+                    WppCore.sendMessage(rawJidObj, text);
+                } else {
+                    Utils.showToast("⚠️ Could not forward: no WA notification for " + contactName, Toast.LENGTH_LONG);
+                    log("AutoStatusForward - forwardTextStatus: no notification and no jid for " + contactName);
+                }
             }
         } catch (Exception e) {
             log("AutoStatusForward - forwardTextStatus err: " + e);
