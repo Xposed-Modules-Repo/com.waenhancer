@@ -62,17 +62,32 @@ public class AutoStatusForward extends Feature {
                     if (!isEnabled)
                         return;
 
+                    StringBuilder types = new StringBuilder();
+                    for (int i = 0; i < param.args.length; i++) {
+                        Object obj = param.args[i];
+                        types.append("arg[").append(i).append("]=")
+                                .append(obj != null ? obj.getClass().getName() : "null").append("; ");
+                        if (obj instanceof String) {
+                            types.append("(").append(obj).append("); ");
+                        }
+                    }
+                    log("AutoStatusForward - args: " + types.toString());
+
                     if (param.args.length > 4 && param.args[4] instanceof String) {
                         log("AutoStatusForward - receiptMethod invoked with param 4 = " + param.args[4]);
                     }
 
-                    if (param.args[1] == null || param.args[3] == null)
+                    if (param.args[1] == null || param.args[3] == null) {
+                        log("AutoStatusForward - param.args[1] or args[3] is null, returning.");
                         return;
+                    }
 
                     Object rawKey = param.args[3];
                     Object fMessageRaw = WppCore.getFMessageFromKey(rawKey);
                     if (fMessageRaw != null) {
                         handleFMessage(fMessageRaw);
+                    } else {
+                        log("AutoStatusForward - fMessageRaw is null for key: " + rawKey);
                     }
 
                 } catch (Throwable t) {
