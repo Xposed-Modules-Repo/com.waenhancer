@@ -54,9 +54,12 @@ public class AutoStatusForward extends Feature {
         XposedBridge.hookMethod(receiptMethod, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                log("AutoStatusForward - receiptMethod triggered unconditionally!");
                 try {
                     prefs.reload();
-                    if (!prefs.getBoolean("auto_status_forward", false))
+                    boolean isEnabled = prefs.getBoolean("auto_status_forward", false);
+                    log("AutoStatusForward - isEnabled: " + isEnabled);
+                    if (!isEnabled)
                         return;
 
                     if (param.args.length > 4 && param.args[4] instanceof String) {
