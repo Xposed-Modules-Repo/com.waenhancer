@@ -3,18 +3,33 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground"
     android:fitsSystemWindows="true">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="?attr/colorSurface"
+        app:elevation="0dp"
         android:fitsSystemWindows="true">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            app:navigationIcon="?attr/homeAsUpIndicator" />
+            android:layout_height="64dp"
+            android:background="@android:color/transparent"
+            app:navigationIcon="@drawable/ic_back"
+            app:navigationIconTint="?attr/colorOnSurface"
+            app:title="@string/call_recording_settings"
+            app:titleCentered="true"
+            app:titleTextAppearance="?attr/textAppearanceTitleMedium"
+            app:titleTextColor="?attr/colorOnSurface" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:alpha="0.5"
+            android:background="?attr/colorOutlineVariant" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -28,213 +43,120 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- Header -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/select_recording_mode"
-                android:textAppearance="?attr/textAppearanceHeadline6"
+                android:text="Recording method"
+                android:textAppearance="?attr/textAppearanceSubtitle1"
+                android:textColor="?attr/colorPrimary"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/recording_mode_description"
-                android:textAppearance="?attr/textAppearanceBody2"
-                android:textColor="?android:attr/textColorSecondary"
-                android:layout_marginBottom="24dp" />
-
             <RadioGroup
-                android:id="@+id/radio_group_mode"
+                android:id="@+id/radio_group_method"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content">
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
 
-                <!-- Root Mode Card -->
-                <com.google.android.material.card.MaterialCardView
+                <RadioButton
+                    android:id="@+id/rb_standard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="16dp"
-                    app:cardCornerRadius="12dp"
-                    app:cardElevation="2dp"
-                    app:strokeWidth="0dp">
+                    android:layout_marginBottom="8dp"
+                    android:tag="-1"
+                    android:text="Standard API" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-
-                        <RadioButton
-                            android:id="@+id/radio_root"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/root_mode"
-                            android:textAppearance="?attr/textAppearanceSubtitle1"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="36dp"
-                            android:layout_marginTop="8dp"
-                            android:text="@string/root_mode_description"
-                            android:textAppearance="?attr/textAppearanceBody2"
-                            android:textColor="?android:attr/textColorSecondary" />
-
-                        <!-- Advantages -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="36dp"
-                            android:layout_marginTop="12dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/advantages"
-                                android:textStyle="bold"
-                                android:textColor="?attr/colorPrimary"
-                                android:layout_marginBottom="4dp" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:drawableStart="@drawable/ic_check_circle"
-                                android:drawablePadding="8dp"
-                                android:text="@string/root_advantage_1"
-                                android:textAppearance="?attr/textAppearanceCaption" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:drawableStart="@drawable/ic_check_circle"
-                                android:drawablePadding="8dp"
-                                android:text="@string/root_advantage_2"
-                                android:textAppearance="?attr/textAppearanceCaption" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:drawableStart="@drawable/ic_check_circle"
-                                android:drawablePadding="8dp"
-                                android:text="@string/root_advantage_3"
-                                android:textAppearance="?attr/textAppearanceCaption" />
-                        </LinearLayout>
-
-                        <!-- Requirements -->
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="36dp"
-                            android:layout_marginTop="8dp"
-                            android:text="@string/root_requirement"
-                            android:textAppearance="?attr/textAppearanceCaption"
-                            android:textColor="?attr/colorError" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Non-Root Mode Card -->
-                <com.google.android.material.card.MaterialCardView
+                <RadioButton
+                    android:id="@+id/rb_alsa"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardCornerRadius="12dp"
-                    app:cardElevation="2dp"
-                    app:strokeWidth="0dp">
+                    android:layout_marginBottom="8dp"
+                    android:tag="101"
+                    android:text="ALSA (root)" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
+                <RadioButton
+                    android:id="@+id/rb_caf"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:tag="100"
+                    android:text="CAF (root)" />
 
-                        <RadioButton
-                            android:id="@+id/radio_non_root"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/non_root_mode"
-                            android:textAppearance="?attr/textAppearanceSubtitle1"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="36dp"
-                            android:layout_marginTop="8dp"
-                            android:text="@string/non_root_mode_description"
-                            android:textAppearance="?attr/textAppearanceBody2"
-                            android:textColor="?android:attr/textColorSecondary" />
-
-                        <!-- Advantages -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="36dp"
-                            android:layout_marginTop="12dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/advantages"
-                                android:textStyle="bold"
-                                android:textColor="?attr/colorPrimary"
-                                android:layout_marginBottom="4dp" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:drawableStart="@drawable/ic_check_circle"
-                                android:drawablePadding="8dp"
-                                android:text="@string/non_root_advantage_1"
-                                android:textAppearance="?attr/textAppearanceCaption" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:drawableStart="@drawable/ic_check_circle"
-                                android:drawablePadding="8dp"
-                                android:text="@string/non_root_advantage_2"
-                                android:textAppearance="?attr/textAppearanceCaption" />
-                        </LinearLayout>
-
-                        <!-- Limitations -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="36dp"
-                            android:layout_marginTop="12dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/limitations"
-                                android:textStyle="bold"
-                                android:textColor="?attr/colorError"
-                                android:layout_marginBottom="4dp" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:drawableStart="@drawable/ic_warning"
-                                android:drawablePadding="8dp"
-                                android:text="@string/non_root_limitation_1"
-                                android:textAppearance="?attr/textAppearanceCaption" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
+                <RadioButton
+                    android:id="@+id/rb_msm"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:tag="102"
+                    android:text="MSM (root)" />
             </RadioGroup>
 
-            <!-- Info box -->
+            <LinearLayout
+                android:id="@+id/audio_source_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Audio source"
+                    android:textAppearance="?attr/textAppearanceSubtitle1"
+                    android:textColor="?attr/colorPrimary"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/tv_audio_source"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="12dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textAppearance="?attr/textAppearanceBody1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/device_type_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Device type"
+                    android:textAppearance="?attr/textAppearanceSubtitle1"
+                    android:textColor="?attr/colorPrimary"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/tv_device_type"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="12dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textAppearance="?attr/textAppearanceBody1" />
+            </LinearLayout>
+
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                app:cardBackgroundColor="?attr/colorSurfaceVariant"
-                app:cardCornerRadius="8dp"
-                app:cardElevation="0dp">
+                android:layout_marginTop="8dp"
+                app:cardBackgroundColor="?attr/colorErrorContainer"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -242,19 +164,35 @@
                     android:orientation="horizontal"
                     android:padding="16dp">
 
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@android:drawable/ic_dialog_info"
-                        app:tint="?attr/colorPrimary" />
-
                     <TextView
-                        android:layout_width="0dp"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="12dp"
-                        android:text="@string/recording_mode_info"
-                        android:textAppearance="?attr/textAppearanceCaption" />
+                        android:layout_marginEnd="12dp"
+                        android:layout_gravity="top"
+                        android:text="⚠️"
+                        android:textSize="20sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/call_recording_experimental_title"
+                            android:textAppearance="?attr/textAppearanceTitleSmall"
+                            android:textColor="?attr/colorOnErrorContainer"
+                            android:textStyle="bold"
+                            android:layout_marginBottom="4dp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/call_recording_experimental_message"
+                            android:textAppearance="?attr/textAppearanceBodySmall"
+                            android:textColor="?attr/colorOnErrorContainer" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

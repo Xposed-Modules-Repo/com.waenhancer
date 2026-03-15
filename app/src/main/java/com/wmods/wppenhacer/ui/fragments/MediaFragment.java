@@ -29,6 +29,26 @@ public class MediaFragment extends BasePreferenceFragment {
         super.onCreatePreferences(savedInstanceState, rootKey);
         setPreferencesFromResource(R.xml.fragment_media, rootKey);
 
+        // Show experimental warning when enabling Call Recording
+        var callRecordingEnable = findPreference("call_recording_enable");
+        if (callRecordingEnable != null) {
+            callRecordingEnable.setOnPreferenceChangeListener((preference, newValue) -> {
+                boolean enabling = (Boolean) newValue;
+                if (enabling) {
+                    new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                            .setTitle(R.string.call_recording_experimental_title)
+                            .setMessage(R.string.call_recording_experimental_message)
+                            .setPositiveButton(R.string.call_recording_experimental_ok, (dialog, which) -> {
+                                ((androidx.preference.TwoStatePreference) preference).setChecked(true);
+                            })
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show();
+                    return false; // Prevent automatic toggle; dialog handles it
+                }
+                return true; // Allow disabling freely
+            });
+        }
+
         // Call Recording Settings preference
         var callRecordingSettings = findPreference("call_recording_settings");
         if (callRecordingSettings != null) {

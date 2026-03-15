@@ -270,4 +270,26 @@
         <item>Equals</item>
     </string-array>
 
+    <!-- Call Recording Audio Sources -->
+    <string-array name="audio_sources_entries">
+        <item>@string/api_source_voice_communication</item>
+        <item>@string/api_source_microphone</item>
+        <item>@string/api_source_voice_recognition</item>
+        <item>@string/api_source_unprocessed</item>
+        <item>@string/api_source_default</item>
+        <item>@string/audio_source_caf</item>
+        <item>@string/audio_source_alsa</item>
+        <item>@string/audio_source_msm</item>
+    </string-array>
+    <string-array name="audio_sources_values">
+        <item>5</item>
+        <item>3</item>
+        <item>6</item>
+        <item>7</item>
+        <item>4</item>
+        <item>100</item>
+        <item>101</item>
+        <item>102</item>
+    </string-array>
+
 </resources>
