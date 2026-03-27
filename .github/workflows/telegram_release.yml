@@ -23,7 +23,7 @@ jobs:
         steps:
             - name: Post release to Telegram channel
               if: ${{ env.BOT_TOKEN != '' && env.CHANNEL_ID != '' }}
-              uses: mubashardev/telegram-github-action@master
+              uses: appleboy/telegram-action@master
               with:
                   to: ${{ secrets.CHANNEL_ID }}
                   token: ${{ secrets.BOT_TOKEN }}
