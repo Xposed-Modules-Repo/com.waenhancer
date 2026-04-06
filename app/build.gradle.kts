@@ -10,6 +10,11 @@ plugins {
     alias(libs.plugins.kotlinAndroid)
 }
 
+kotlin {
+    jvmToolchain(17)
+}
+
+
 fun getGitHashCommit(): String {
     return try {
         val processBuilder = ProcessBuilder("git", "rev-parse", "--short", "HEAD")
