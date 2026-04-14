@@ -29,6 +29,7 @@ import com.wmods.wppenhacer.databinding.FragmentHomeBinding;
 import com.wmods.wppenhacer.ui.fragments.base.BaseFragment;
 import com.wmods.wppenhacer.utils.FilePicker;
 import com.wmods.wppenhacer.xposed.core.FeatureLoader;
+import com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
 import org.json.JSONArray;
@@ -171,7 +172,12 @@ public class HomeFragment extends BaseFragment {
 
         binding.githubBtn.setOnClickListener(view -> {
             animateClick(view);
-            openUrl(requireContext(), "https://github.com/mubashardev/WaEnhancer/discussions");
+            openUrl(requireContext(), "https://github.com/mubasharhussain/WaEnhancer/discussions");
+        });
+
+        binding.clearCacheBtn.setOnClickListener(view -> {
+            animateClick(view);
+            showClearCacheConfirmation();
         });
 
         startCardAnimations();
@@ -520,6 +526,24 @@ public class HomeFragment extends BaseFragment {
     private static void checkWpp(FragmentActivity activity) {
         Intent checkWpp = new Intent(BuildConfig.APPLICATION_ID + ".CHECK_WPP");
         activity.sendBroadcast(checkWpp);
+    }
+
+    private void showClearCacheConfirmation() {
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.clear_obfuscate_cache)
+                .setMessage(R.string.clear_cache_confirmation)
+                .setPositiveButton(R.string.yes, (dialog, which) -> {
+                    UnobfuscatorCache.init(App.getInstance());
+                    UnobfuscatorCache.getInstance().clearCache();
+                    
+                    // Send broadcast to WhatsApp/Business processes to clear their internal cache
+                    Intent clearIntent = new Intent(BuildConfig.APPLICATION_ID + ".CLEAR_OBFUSCATE_CACHE");
+                    requireContext().sendBroadcast(clearIntent);
+                    
+                    Utils.showToast(getString(R.string.obfuscate_cache_cleared), Toast.LENGTH_SHORT);
+                })
+                .setNegativeButton(R.string.no, null)
+                .show();
     }
 
     @Override

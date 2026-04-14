@@ -239,7 +239,11 @@ public class Others extends Feature {
 
         stampCopiedMessage();
 
-        doubleTapReaction();
+        try {
+            doubleTapReaction();
+        } catch (Exception e) {
+            logDebug(e);
+        }
 
         alwaysOnline();
 

@@ -325,6 +325,19 @@ public class FeatureLoader {
         };
         ContextCompat.registerReceiver(mApp, restartManualReceiver,
                 new IntentFilter(BuildConfig.APPLICATION_ID + ".MANUAL_RESTART"), ContextCompat.RECEIVER_EXPORTED);
+
+        // Clear Cache receiver
+        BroadcastReceiver clearCacheReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (UnobfuscatorCache.getInstance() != null) {
+                    UnobfuscatorCache.getInstance().clearCache();
+                    XposedBridge.log("WaEnhancer: Obfuscate cache cleared via broadcast");
+                }
+            }
+        };
+        ContextCompat.registerReceiver(mApp, clearCacheReceiver,
+                new IntentFilter(BuildConfig.APPLICATION_ID + ".CLEAR_OBFUSCATE_CACHE"), ContextCompat.RECEIVER_EXPORTED);
     }
 
     private static void sendEnabledBroadcast(Context context) {

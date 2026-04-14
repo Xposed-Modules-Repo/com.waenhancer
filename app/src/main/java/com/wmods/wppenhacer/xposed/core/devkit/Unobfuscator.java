@@ -248,16 +248,29 @@ public class Unobfuscator {
                     "jid.DeviceJid");
             var classPhoneUserJid = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith,
                     "jid.PhoneUserJid");
+            
+            // Strategy 1: Broaden param count search (WhatsApp often adds params)
             var methods = dexkit.findMethod(
                     FindMethod.create()
                             .matcher(MethodMatcher.create()
                                     .addUsingString("receipt")
-                                    .paramCount(5, 8)));
+                                    .paramCount(4, 12)));
 
             for (var method : methods) {
                 var params = method.getParamTypeNames();
                 if (params.contains(classDeviceJid.getName()) && params.contains(classPhoneUserJid.getName()))
                     return method.getMethodInstance(classLoader);
+            }
+
+            // Strategy 2: Relax JID constraints if no perfect match found
+            for (var method : methods) {
+                var params = method.getParamTypeNames();
+                if (params.contains(classDeviceJid.getName()) || params.contains(classPhoneUserJid.getName())) {
+                     // Filter for likely read receipt method: usually returns void and has a String (message ID)
+                     if (method.getReturnType().equals("void") && params.stream().anyMatch(p -> p.equals("java.lang.String"))) {
+                         return method.getMethodInstance(classLoader);
+                     }
+                }
             }
 
             throw new NoSuchMethodError("Receipt method not found");
@@ -968,20 +981,47 @@ public class Unobfuscator {
 
     public synchronized static Class<?> loadConversationRowClass(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getClass(loader, () -> {
-            var clazz = findFirstClassUsingStrings(loader, StringMatchType.Contains,
-                    "ConversationRow/setupUserNameInGroupView/");
-            if (clazz != null)
-                return clazz;
-            var conversation_header = Utils.getID("conversation_row_participant_header_view_stub", "id");
-            var nameId = Utils.getID("name_in_group", "id");
-            var classData = dexkit
-                    .findClass(FindClass.create()
-                            .matcher(ClassMatcher.create().addMethod(
-                                    MethodMatcher.create().addUsingNumber(conversation_header).addUsingNumber(nameId))))
-                    .singleOrNull();
-            if (classData == null)
-                throw new Exception("ConversationRow class not found");
-            return classData.getInstance(loader);
+            // String anchors can change between WA versions, so try a few variants.
+            for (String anchor : new String[]{
+                    "ConversationRow/setupUserNameInGroupView/",
+                    "ConversationRow/setupUserNameInGroupView",
+                    "setupUserNameInGroupView"
+            }) {
+                var byString = findFirstClassUsingStrings(loader, StringMatchType.Contains, anchor);
+                if (byString != null && ViewGroup.class.isAssignableFrom(byString)) {
+                    return byString;
+                }
+            }
+
+            // Resource-name based anchors are more stable, but the names can also change.
+            // Only include valid (>0) IDs in the matcher to avoid over-constraining the search.
+            var ids = new ArrayList<Integer>();
+            for (String idName : new String[]{
+                    "conversation_row_participant_header_view_stub",
+                    "name_in_group",
+                    "reactions_bubble_layout"
+            }) {
+                int id = Utils.getID(idName, "id");
+                if (id > 0) ids.add(id);
+            }
+
+            ClassDataList candidates = new ClassDataList();
+            if (!ids.isEmpty()) {
+                candidates = dexkit.findClass(
+                        FindClass.create().matcher(
+                                ClassMatcher.create().addMethod(
+                                        MethodMatcher.create().usingNumbers(ids)
+                                )));
+            }
+
+            for (ClassData classData : candidates) {
+                Class<?> cls = classData.getInstance(loader);
+                if (!ViewGroup.class.isAssignableFrom(cls)) continue;
+                if (Modifier.isAbstract(cls.getModifiers()) || cls.isInterface()) continue;
+                return cls;
+            }
+
+            throw new Exception("ConversationRow class not found");
         });
     }
 
@@ -1957,6 +1997,23 @@ public class Unobfuscator {
         return UnobfuscatorCache.getInstance().getMethod(classLoader, () -> {
             var method = findFirstMethodUsingStrings(classLoader, StringMatchType.Contains,
                     "heroaudioplayer/setPlaybackSpeed");
+            if (method == null) {
+                // Fallback 1: try just "setPlaybackSpeed" (may be logged differently now)
+                method = findFirstMethodUsingStrings(classLoader, StringMatchType.Contains, "setPlaybackSpeed");
+            }
+            if (method == null) {
+                // Fallback 2: look for Float parameter in a method that contains "PlaybackSpeed" string
+                 var methods = dexkit.findMethod(
+                    FindMethod.create()
+                            .matcher(MethodMatcher.create()
+                                    .addUsingString("PlaybackSpeed", StringMatchType.Contains)
+                                    .paramCount(1)));
+                for (var m : methods) {
+                    if (m.getParamTypeNames().get(0).equals("float")) {
+                        return m.getMethodInstance(classLoader);
+                    }
+                }
+            }
             if (method == null)
                 throw new RuntimeException("PlaybackSpeed method not found");
             return method;
@@ -2302,6 +2359,12 @@ public class Unobfuscator {
             if (methodData.isEmpty()) {
                 methodData = dexkit.findMethod(FindMethod.create().matcher(
                         MethodMatcher.create().addUsingString("show_media_quality_toggle").returnType(boolean.class)));
+            }
+
+            if (methodData.isEmpty()) {
+                // Fallback 1: Broad Search for "media_quality" string
+                methodData = dexkit.findMethod(FindMethod.create().matcher(
+                        MethodMatcher.create().addUsingString("media_quality", StringMatchType.Contains).returnType(boolean.class)));
             }
 
             if (methodData.isEmpty())

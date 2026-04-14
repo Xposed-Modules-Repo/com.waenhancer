@@ -697,6 +697,21 @@
                             app:strokeColor="@color/status_inactive"
                             app:strokeWidth="1dp" />
 
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/clearCacheBtn"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="52dp"
+                            android:layout_marginTop="10dp"
+                            android:letterSpacing="0.02"
+                            android:text="@string/clear_obfuscate_cache"
+                            android:textAllCaps="false"
+                            android:textStyle="bold"
+                            app:cornerRadius="50dp"
+                            app:icon="@drawable/ic_reload"
+                            app:iconGravity="textStart"
+                            app:iconSize="18dp" />
+
                     </LinearLayout>
 
                     <!-- ═══════════════════════════════════════════ -->

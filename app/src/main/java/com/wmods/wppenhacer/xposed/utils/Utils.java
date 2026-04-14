@@ -20,6 +20,7 @@ import android.os.Looper;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -118,13 +119,17 @@ public class Utils {
             Context context = app.getApplicationContext();
             int id = context.getResources().getIdentifier(name, type, app.getPackageName());
 
+            // Android returns 0 when the resource name/type is not found.
+            // Normalize to -1 so callers can reliably detect missing resources.
+            if (id == 0) id = -1;
+
             synchronized (ids) {
                 ids.put(key, id);
             }
 
             return id;
         } catch (Exception e) {
-            XposedBridge.log("Error getting resource ID: type=" + type + ", name=" + name + ", error: " + e.getMessage());
+            log("Error getting resource ID: type=" + type + ", name=" + name + ", error: " + e.getMessage());
             return -1;
         }
     }
@@ -234,7 +239,7 @@ public class Utils {
                     out.write(bArr, 0, read);
                 }
             } catch (Exception e) {
-                XposedBridge.log(e);
+                log(e);
                 return e.getMessage();
             }
         }
@@ -250,6 +255,22 @@ public class Utils {
             new Handler(Looper.getMainLooper()).post(() ->
                     Toast.makeText(Utils.getApplication(), message, length).show()
             );
+        }
+    }
+
+    public static void log(String message) {
+        try {
+            XposedBridge.log(message);
+        } catch (NoClassDefFoundError | NoSuchMethodError e) {
+            Log.d("WaEnhancer", message);
+        }
+    }
+
+    public static void log(Throwable t) {
+        try {
+            XposedBridge.log(t);
+        } catch (NoClassDefFoundError | NoSuchMethodError e) {
+            Log.e("WaEnhancer", "Error", t);
         }
     }
 

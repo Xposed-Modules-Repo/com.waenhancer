@@ -64,7 +64,13 @@ public class UnobfuscatorCache {
             } catch (Exception ignored) {
             }
             if (version != currentVersion || savedUpdateTime != lastUpdateTime || !versionName.equals(savedVersionName)) {
-                Utils.showToast(application.getString(ResId.string.starting_cache), Toast.LENGTH_LONG);
+                int toastResId = ResId.string.starting_cache;
+                if (toastResId == 0) {
+                    toastResId = mApplication.getResources().getIdentifier("starting_cache", "string", mApplication.getPackageName());
+                }
+                if (toastResId != 0) {
+                    Utils.showToast(mApplication.getString(toastResId), Toast.LENGTH_LONG);
+                }
                 sPrefsCacheHooks.edit().clear().commit();
                 sPrefsCacheHooks.edit().putLong("version", currentVersion).commit();
                 sPrefsCacheHooks.edit().putLong("updateTime", lastUpdateTime).commit();
@@ -87,6 +93,20 @@ public class UnobfuscatorCache {
 
     public static UnobfuscatorCache getInstance() {
         return mInstance;
+    }
+
+    @SuppressLint("ApplySharedPref")
+    public void clearCache() {
+        sPrefsCacheHooks.edit().clear().commit();
+        try {
+            long currentVersion = mApplication.getPackageManager().getPackageInfo(mApplication.getPackageName(), 0).getLongVersionCode();
+            long lastUpdateTime = mApplication.getPackageManager().getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime;
+            String versionName = BuildConfig.VERSION_NAME;
+            sPrefsCacheHooks.edit().putLong("version", currentVersion).commit();
+            sPrefsCacheHooks.edit().putLong("updateTime", lastUpdateTime).commit();
+            sPrefsCacheHooks.edit().putString("wae_version_name", versionName).commit();
+        } catch (Exception ignored) {
+        }
     }
 
     private void initCacheStrings() {
@@ -164,9 +184,9 @@ public class UnobfuscatorCache {
                 });
             }
             latch.await(); // Wait for all threads to finish
-            XposedBridge.log("String cache saved in " + (System.currentTimeMillis() - currentTime) + "ms");
+            Utils.log("String cache saved in " + (System.currentTimeMillis() - currentTime) + "ms");
         } catch (Exception e) {
-            XposedBridge.log(e);
+            Utils.log(e);
         } finally {
             executor.shutdown();
         }
@@ -178,7 +198,7 @@ public class UnobfuscatorCache {
             System.gc();
         }
         search = search.toLowerCase().replaceAll("\\s", "");
-        XposedBridge.log("need search obsfucate: " + search);
+        Utils.log("need search obsfucate: " + search);
         return reverseResourceMap.get(search);
     }
 
