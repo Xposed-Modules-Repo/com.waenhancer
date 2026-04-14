@@ -51,6 +51,10 @@ public final class NoticeCenter {
     private static final String KEY_CACHE_FETCHED_AT = "cache_fetched_at";
 
     private static final long MIN_FETCH_INTERVAL_MS = TimeUnit.MINUTES.toMillis(5);
+    private static final long SHOW_INTERVAL_MS = TimeUnit.HOURS.toMillis(1);
+
+    private static final String KEY_LAST_SHOWN_AT = "last_shown_at";
+    private static final String KEY_LAST_SHOWN_SIG = "last_shown_sig";
 
     private static final AtomicBoolean sCheckInFlight = new AtomicBoolean(false);
     private static final AtomicBoolean sDialogShowing = new AtomicBoolean(false);
@@ -95,6 +99,20 @@ public final class NoticeCenter {
             }
 
             if (selected == null) {
+                sDialogShowing.set(false);
+                return;
+            }
+
+            // Rate-limiting check
+            SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            long lastShownAt = prefs.getLong(KEY_LAST_SHOWN_AT, 0);
+            String lastShownSig = prefs.getString(KEY_LAST_SHOWN_SIG, "");
+            String currentSig = selected.id + ":" + selected.revision;
+
+            boolean isNewNotice = !currentSig.equals(lastShownSig);
+            boolean isExpired = (System.currentTimeMillis() - lastShownAt) >= SHOW_INTERVAL_MS;
+
+            if (!isNewNotice && !isExpired) {
                 sDialogShowing.set(false);
                 return;
             }
@@ -161,6 +179,14 @@ public final class NoticeCenter {
         String dismissLabel = (dismiss != null && !TextUtils.isEmpty(dismiss.label)) ? dismiss.label : "Dismiss";
         btnDismiss.setText(dismissLabel);
         btnDismiss.setOnClickListener(v -> dialog.dismiss());
+
+        // Update persistence state
+        String currentSig = notice.id + ":" + notice.revision;
+        activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putLong(KEY_LAST_SHOWN_AT, System.currentTimeMillis())
+                .putString(KEY_LAST_SHOWN_SIG, currentSig)
+                .apply();
 
         dialog.show();
     }
