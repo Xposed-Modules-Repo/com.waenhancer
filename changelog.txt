@@ -1,7 +1,7 @@
 [ADDED]
-- Added support for WA/WB 2.26.13.xx
+- Added support for WA/WB 2.26.13.xx and 2.26.14.xx
 - Added support for other architectures (x86, x86_64, armv7).
 
 [FIXED]
-- Fixed SeenTick & ViewOnceDownloadMenu not working on WB 2.26.12.xx
+- Fixed SeenTick & ViewOnceDownloadMenu not working
 - Fixed issue when sending media in high quality.
