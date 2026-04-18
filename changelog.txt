@@ -1,6 +1,6 @@
-### Changed the app's internal ID to `com.waenhancer`
-[ADDED]
-- Added support for future 3 versions of WhatsApp.
-
 [FIXED]
-- Added consolidated "Video Note Features" toggle in Media settings.
+- Fixed GroupAdmin error on app startup and GroupAdmin indicator not working issue
+- Fixed Separate Groups tab injection to support non-ArrayList List implementations with enhanced diagnostic logging.
+- Fixed message bubble color transparency not working when default color is selected.
+
+Note: If 100% transparency of bubble color not working for you, simply change the default color to any other keeping 100% transparency.
