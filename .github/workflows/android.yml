@@ -64,6 +64,7 @@ jobs:
           sed -i "s/VERSION_NAME=.*/VERSION_NAME=$NEW_VERSION_NAME/" gradle.properties
           
           echo "Bumping version from $VERSION_NAME ($VERSION_CODE) -> $NEW_VERSION_NAME ($NEW_VERSION_CODE)"
+          echo "NEW_VERSION_NAME=$NEW_VERSION_NAME" >> $GITHUB_ENV
 
           # Commit and Push back to GitHub
           git config --global user.name "GitHub Action"
@@ -82,13 +83,13 @@ jobs:
       - name: Upload WhatsApp flavor artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: whatsapp-debug-app-${{ env.SHORT_SHA }}
+          name: whatsapp-debug-app-${{ env.NEW_VERSION_NAME }}
           path: app/build/outputs/apk/whatsapp/debug/app-whatsapp-debug.apk
 
       - name: Upload Business flavor artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: business-debug-app-${{ env.SHORT_SHA }}
+          name: business-debug-app-${{ env.NEW_VERSION_NAME }}
           path: app/build/outputs/apk/business/debug/app-business-debug.apk
 
       - name: Upload to GitHub release
@@ -96,12 +97,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: WaEnhancer ${{ env.SHORT_SHA }}
+          name: WaEnhancer ${{ env.NEW_VERSION_NAME }}
           body_path: changelog.txt
           files: |
             app/build/outputs/apk/whatsapp/debug/app-whatsapp-debug.apk
             app/build/outputs/apk/business/debug/app-business-debug.apk
-          tag_name: debug-${{ env.SHORT_SHA }}
+          tag_name: ${{ env.NEW_VERSION_NAME }}
 
       - name: Read changelog
         id: changelog
