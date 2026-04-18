@@ -1017,7 +1017,24 @@ public class Unobfuscator {
             for (ClassData classData : candidates) {
                 Class<?> cls = classData.getInstance(loader);
                 if (!ViewGroup.class.isAssignableFrom(cls)) continue;
-                if (Modifier.isAbstract(cls.getModifiers()) || cls.isInterface()) continue;
+                if (cls.isInterface()) continue;
+                return cls;
+            }
+
+            // Signature Fallback: Find a ViewGroup with a method returning FMessage class
+            var fMessageClass = loadFMessageClass(loader);
+            var signatureResults = dexkit.findClass(FindClass.create().matcher(
+                    ClassMatcher.create()
+                            .addMethod(MethodMatcher.create()
+                                    .paramCount(0)
+                                    .returnType(fMessageClass.getName())
+                            )
+            ));
+
+            for (ClassData classData : signatureResults) {
+                Class<?> cls = classData.getInstance(loader);
+                if (!ViewGroup.class.isAssignableFrom(cls)) continue;
+                if (cls.isInterface()) continue;
                 return cls;
             }
 
@@ -1692,6 +1709,86 @@ public class Unobfuscator {
                     "ConversationRow/setupUserNameInGroupView/",
                     "ConversationRow/setupUserNameInGroupView",
                     "setupUserNameInGroupView");
+
+            if (method == null) {
+                // Fallback 1: Find the class that uses name_in_group AND has getFMessage()
+                // Then find the render/bind method within that class
+                int nameInGroupId = Utils.getID("name_in_group", "id");
+                XposedBridge.log("GroupAdmin: Starting getFMessage-based trace for ID=" + nameInGroupId);
+                if (nameInGroupId > 0) {
+                    var globalResults = dexkit.findMethod(FindMethod.create()
+                            .matcher(MethodMatcher.create().addUsingNumber(nameInGroupId)));
+
+                    // Step 1: Find the target class (has getFMessage + is a View)
+                    Class<?> targetClass = null;
+                    for (var mData : globalResults) {
+                        if (mData.getName().equals("<init>") || mData.getName().equals("<clinit>")) continue;
+                        
+                        Class<?> cls;
+                        try {
+                            cls = mData.getDeclaredClass().getInstance(loader);
+                        } catch (Throwable t) {
+                            continue;
+                        }
+
+                        boolean hasFMessage = false;
+                        Class<?> check = cls;
+                        while (check != null && check != Object.class) {
+                            try {
+                                check.getDeclaredMethod("getFMessage");
+                                hasFMessage = true;
+                                break;
+                            } catch (NoSuchMethodException ignored) {
+                            }
+                            check = check.getSuperclass();
+                        }
+
+                        if (hasFMessage && android.view.View.class.isAssignableFrom(cls)) {
+                            targetClass = cls;
+                            XposedBridge.log("GroupAdmin: Target class found: " + cls.getName());
+                            break;
+                        }
+                    }
+
+                    // Step 2: In the target class, find bind candidates (Priority: Static -> Member)
+                    if (targetClass != null) {
+                        var fMessageClass = loadFMessageClass(loader);
+                        var classData = dexkit.getClassData(targetClass);
+                        if (classData != null) {
+                            // Priority 1: static A04(Row, Message, ..., ...) - Wildcard message type
+                            var bindMethods = classData.findMethod(FindMethod.create().matcher(MethodMatcher.create()
+                                    .modifiers(Modifier.STATIC)
+                                    .paramCount(4)
+                                    .paramTypes(targetClass.getName(), null, null, "java.lang.String")
+                                    .returnType("void")));
+
+                            // Priority 2: static A03(Row, Message) - Wildcard message type
+                            if (bindMethods.isEmpty()) {
+                                bindMethods = classData.findMethod(FindMethod.create().matcher(MethodMatcher.create()
+                                        .modifiers(Modifier.STATIC)
+                                        .paramCount(2)
+                                        .paramTypes(targetClass.getName(), null)
+                                        .returnType("void")));
+                            }
+                            
+                            // Priority 3: member setFMessage(Message)
+                            if (bindMethods.isEmpty()) {
+                                bindMethods = classData.findMethod(FindMethod.create().matcher(MethodMatcher.create()
+                                        .paramCount(1)
+                                        .paramTypes(fMessageClass.getName())
+                                        .returnType("void")));
+                            }
+                            
+                            if (!bindMethods.isEmpty()) {
+                                method = bindMethods.get(0).getMethodInstance(loader);
+                                XposedBridge.log("GroupAdmin: Selected bind method: " + method.getName() + " in " + targetClass.getName() + " (static=" + Modifier.isStatic(method.getModifiers()) + ")");
+                            } else {
+                                XposedBridge.log("GroupAdmin: No standard bind method found in " + targetClass.getName());
+                            }
+                        }
+                    }
+                }
+            }
 
             if (method == null) {
                 // Fallback to original name (if not obfuscated)
