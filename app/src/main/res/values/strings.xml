@@ -486,6 +486,8 @@
     <string name="action_follow_developer">Coming soon!</string>
     <string name="video_note_attachment">[Experimental] Video Note Attachment</string>
     <string name="video_note_attachment_sum">Add a "Video Note" button to the chat attachment menu. Currently under development and may cause crashes.</string>
+    <string name="send_video_as_video_note">Send video as video note</string>
+    <string name="send_video_as_video_note_sum">Always send video media/forward as a video note (PTV)</string>
 
     <string name="warning_restore">When restoring the backup all messages after the backup will be lost, are you sure you want to continue?</string>
     <string name="force_restore_backup_experimental">Force Restore Backup (Experimental)</string>

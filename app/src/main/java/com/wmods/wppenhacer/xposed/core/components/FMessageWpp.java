@@ -161,6 +161,7 @@ public class FMessageWpp {
      */
     public boolean isMediaFile() {
         try {
+            if (abstractMediaMessageClass == null) return false;
             return abstractMediaMessageClass.isInstance(fmessage);
         } catch (Exception e) {
             return false;
@@ -169,12 +170,13 @@ public class FMessageWpp {
 
     public File getMediaFile() {
         try {
-            if (!isMediaFile()) return null;
+            if (!isMediaFile() || abstractMediaMessageClass == null) return null;
             for (var field : abstractMediaMessageClass.getDeclaredFields()) {
                 if (field.getType().isPrimitive()) continue;
                 var fileField = ReflectionUtils.getFieldByType(field.getType(), File.class);
                 if (fileField != null) {
                     var mediaObject = ReflectionUtils.getObjectField(field, fmessage);
+                    if (mediaObject == null) continue;
                     var mediaFile = (File) fileField.get(mediaObject);
                     if (mediaFile != null) return mediaFile;
                     var filePath = MessageStore.getInstance().getMediaFromID(getRowId());

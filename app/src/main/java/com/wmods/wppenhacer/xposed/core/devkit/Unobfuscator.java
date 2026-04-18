@@ -1687,11 +1687,24 @@ public class Unobfuscator {
 
     public synchronized static Method loadGroupAdminMethod(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getMethod(loader, () -> {
-            var method = dexkit.findMethod(
-                    FindMethod.create().matcher(MethodMatcher.create().name("setupUsernameInGroupViewContainer")));
-            if (method.isEmpty())
+            // Try searching by string anchors first (more robust)
+            var method = findFirstMethodUsingStrings(loader, StringMatchType.Contains,
+                    "ConversationRow/setupUserNameInGroupView/",
+                    "ConversationRow/setupUserNameInGroupView",
+                    "setupUserNameInGroupView");
+
+            if (method == null) {
+                // Fallback to original name (if not obfuscated)
+                var results = dexkit.findMethod(
+                        FindMethod.create().matcher(MethodMatcher.create().name("setupUsernameInGroupViewContainer")));
+                if (!results.isEmpty()) {
+                    method = results.get(0).getMethodInstance(loader);
+                }
+            }
+
+            if (method == null)
                 throw new RuntimeException("GroupAdmin method not found");
-            return method.get(0).getMethodInstance(loader);
+            return method;
         });
     }
 

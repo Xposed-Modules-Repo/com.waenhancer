@@ -36,56 +36,71 @@ public class VideoNoteAttachment extends Feature {
 
     @Override
     public void doHook() throws Throwable {
-        if (!prefs.getBoolean("video_note_attachment", false))
+        prefs.reload();
+        boolean showButton = prefs.getBoolean("video_note_attachment", false);
+        boolean forceGlobal = prefs.getBoolean("send_video_as_video_note", false);
+
+        if (!showButton && !forceGlobal)
             return;
 
         // ── 1. Inject "Video Note" button into the attachment picker ────────────
-        final int rowId = Utils.getID("attach_picker_row", "id");
-
-        XposedBridge.hookAllMethods(ViewGroup.class, "addView", new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                View added = (View) param.args[0];
-                if (added == null || rowId <= 0 || added.getId() != rowId)
-                    return;
-                ViewGroup parent = (ViewGroup) param.thisObject;
-
-                added.post(() -> {
-                    try {
-                        if (parent.findViewWithTag("wae_videonote") != null)
-                            return;
-
-                        // Find last attach_picker_row inside parent
-                        ViewGroup lastRow = null;
-                        ViewGroup firstRow = null;
-                        for (int i = 0; i < parent.getChildCount(); i++) {
-                            View child = parent.getChildAt(i);
-                            if (child.getId() == rowId && child instanceof ViewGroup) {
-                                if (firstRow == null)
-                                    firstRow = (ViewGroup) child;
-                                lastRow = (ViewGroup) child;
-                            }
-                        }
-                        if (lastRow == null)
-                            return;
-
-                        // Get exact item size from a known button in row 1
-                        int btnW = Utils.dipToPixels(88);
-                        int btnH = Utils.dipToPixels(140);
-                        if (firstRow != null && firstRow.getChildCount() > 0) {
-                            View ref = firstRow.getChildAt(0);
-                            if (ref.getWidth() > 0)
-                                btnW = ref.getWidth();
-                            if (ref.getHeight() > 0)
-                                btnH = ref.getHeight();
-                        }
-                        injectVideoNoteItem(lastRow, btnW, btnH);
-                    } catch (Exception e) {
-                        // Ignore
-                    }
-                });
+        if (showButton) {
+            int rId = Utils.getID("attach_picker_row", "id");
+            if (rId <= 0) {
+                // Try fallback for newer WhatsApp
+                rId = Utils.getID("attach_row_container", "id");
             }
-        });
+            if (rId <= 0) {
+                rId = Utils.getID("attach_content", "id");
+            }
+
+            final int rowId = rId;
+
+            XposedBridge.hookAllMethods(ViewGroup.class, "addView", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    View added = (View) param.args[0];
+                    if (added == null || rowId <= 0 || added.getId() != rowId)
+                        return;
+                    ViewGroup parent = (ViewGroup) param.thisObject;
+
+                    added.post(() -> {
+                        try {
+                            if (parent.findViewWithTag("wae_videonote") != null)
+                                return;
+
+                            // Find last attach_picker_row inside parent
+                            ViewGroup lastRow = null;
+                            ViewGroup firstRow = null;
+                            for (int i = 0; i < parent.getChildCount(); i++) {
+                                View child = parent.getChildAt(i);
+                                if (child.getId() == rowId && child instanceof ViewGroup) {
+                                    if (firstRow == null)
+                                        firstRow = (ViewGroup) child;
+                                    lastRow = (ViewGroup) child;
+                                }
+                            }
+                            if (lastRow == null)
+                                return;
+
+                            // Get exact item size from a known button in row 1
+                            int btnW = Utils.dipToPixels(88);
+                            int btnH = Utils.dipToPixels(140);
+                            if (firstRow != null && firstRow.getChildCount() > 0) {
+                                View ref = firstRow.getChildAt(0);
+                                if (ref.getWidth() > 0)
+                                    btnW = ref.getWidth();
+                                if (ref.getHeight() > 0)
+                                    btnH = ref.getHeight();
+                            }
+                            injectVideoNoteItem(lastRow, btnW, btnH);
+                        } catch (Exception e) {
+                            // Ignore
+                        }
+                    });
+                }
+            });
+        }
 
         // ── 2. Intercept the Activity result when the user picks a video ────────
         // ActivityController filters by a proxy class, so we hook separately here.
@@ -118,31 +133,30 @@ public class VideoNoteAttachment extends Feature {
                         com.wmods.wppenhacer.xposed.core.components.FMessageWpp wrappedMsg = new com.wmods.wppenhacer.xposed.core.components.FMessageWpp(
                                 fMessage);
 
+                        if (!wrappedMsg.isMediaFile())
+                            return;
+
                         int mediaType = wrappedMsg.getMediaType();
                         // Video mediaType is normally 3. If we intercept construction of a video,
                         // we'll check if it's meant to be a Video Note (e.g. via our "Video Note"
                         // button)
+                        // Video mediaType is normally 3. If we intercept construction of a video,
+                        // we'll check if it's meant to be a Video Note (e.g. via our "Video Note"
+                        // button or the global preference)
                         if (mediaType == 3) {
                             java.io.File mediaFile = wrappedMsg.getMediaFile();
-                            if (mediaFile != null
-                                    && mediaFile.getAbsolutePath().toLowerCase().contains("whatsapp video notes")) {
+                            boolean forceGlobal = prefs.getBoolean("send_video_as_video_note", false);
+
+                            if (forceGlobal || (mediaFile != null
+                                    && mediaFile.getAbsolutePath().toLowerCase().contains("whatsapp video notes"))
+                                    || VideoNoteAttachment.FORCE_NEXT_VIDEO_AS_PTV) {
                                 java.lang.reflect.Field mediaTypeField = Unobfuscator.loadMediaTypeField(classLoader);
                                 mediaTypeField.setAccessible(true);
                                 mediaTypeField.setInt(fMessage, 81);
                                 fakeVideoNotes.put(fMessage, true);
-                            } else {
-                                // Also check our custom "wae_force_ptv" static flag that we can set during
-                                // picking
-                                if (VideoNoteAttachment.FORCE_NEXT_VIDEO_AS_PTV) {
-                                    java.lang.reflect.Field mediaTypeField = Unobfuscator
-                                            .loadMediaTypeField(classLoader);
-                                    mediaTypeField.setAccessible(true);
-                                    mediaTypeField.setInt(fMessage, 81);
-                                    fakeVideoNotes.put(fMessage, true);
 
-                                    // Reset the flag after consuming it
-                                    VideoNoteAttachment.FORCE_NEXT_VIDEO_AS_PTV = false;
-                                }
+                                // Reset the flag after consuming it
+                                VideoNoteAttachment.FORCE_NEXT_VIDEO_AS_PTV = false;
                             }
                         }
                     }

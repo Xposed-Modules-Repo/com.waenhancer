@@ -79,6 +79,11 @@
             app:key="video_maxfps"
             app:summary="@string/send_video_in_60fps_sum"
             app:title="@string/send_video_in_60fps" />
+
+        <rikka.material.preference.MaterialSwitchPreference
+            app:key="send_video_as_video_note"
+            app:summary="@string/send_video_as_video_note_sum"
+            app:title="@string/send_video_as_video_note" />
     </PreferenceCategory>
 
     <PreferenceCategory
