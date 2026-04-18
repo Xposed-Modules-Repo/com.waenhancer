@@ -47,11 +47,27 @@ public class BubbleColors extends Feature {
                 if (drawable == null)return;
                 var position = (int) param.args[0];
                 if (position == 3) {
-                    if (bubbleRightColor == 0) return;
-                    drawable.setColorFilter(new PorterDuffColorFilter(bubbleRightColor, PorterDuff.Mode.SRC_IN));
+                    // If bubble color is not enabled and color is 0, skip
+                    if (!bubbleColor && bubbleRightColor == 0) {
+                        return;
+                    }
+                    // If color is 0, clear the filter; otherwise apply the color
+                    if (bubbleRightColor == 0) {
+                        drawable.setColorFilter(null);
+                    } else {
+                        drawable.setColorFilter(new PorterDuffColorFilter(bubbleRightColor, PorterDuff.Mode.SRC_IN));
+                    }
                 } else {
-                    if (bubbleLeftColor == 0) return;
-                    drawable.setColorFilter(new PorterDuffColorFilter(bubbleLeftColor, PorterDuff.Mode.SRC_IN));
+                    // If bubble color is not enabled and color is 0, skip
+                    if (!bubbleColor && bubbleLeftColor == 0) {
+                        return;
+                    }
+                    // If color is 0, clear the filter; otherwise apply the color
+                    if (bubbleLeftColor == 0) {
+                        drawable.setColorFilter(null);
+                    } else {
+                        drawable.setColorFilter(new PorterDuffColorFilter(bubbleLeftColor, PorterDuff.Mode.SRC_IN));
+                    }
                 }
             }
         });
@@ -64,11 +80,27 @@ public class BubbleColors extends Feature {
                 if (drawable == null)return;
                 var position = (int) param.args[1];
                 if (position == 3) {
-                    if (bubbleRightColor == 0) return;
-                    drawable.setColorFilter(new PorterDuffColorFilter(bubbleRightColor, PorterDuff.Mode.SRC_IN));
+                    // If bubble color is not enabled and color is 0, skip
+                    if (!bubbleColor && bubbleRightColor == 0) {
+                        return;
+                    }
+                    // If color is 0, clear the filter; otherwise apply the color
+                    if (bubbleRightColor == 0) {
+                        drawable.setColorFilter(null);
+                    } else {
+                        drawable.setColorFilter(new PorterDuffColorFilter(bubbleRightColor, PorterDuff.Mode.SRC_IN));
+                    }
                 } else {
-                    if (bubbleLeftColor == 0) return;
-                    drawable.setColorFilter(new PorterDuffColorFilter(bubbleLeftColor, PorterDuff.Mode.SRC_IN));
+                    // If bubble color is not enabled and color is 0, skip
+                    if (!bubbleColor && bubbleLeftColor == 0) {
+                        return;
+                    }
+                    // If color is 0, clear the filter; otherwise apply the color
+                    if (bubbleLeftColor == 0) {
+                        drawable.setColorFilter(null);
+                    } else {
+                        drawable.setColorFilter(new PorterDuffColorFilter(bubbleLeftColor, PorterDuff.Mode.SRC_IN));
+                    }
                 }
             }
         });
@@ -83,11 +115,27 @@ public class BubbleColors extends Feature {
                 var draw = (Drawable) param.getResult();
                 var right = position == 3;
                 if (right) {
-                    if (bubbleRightColor == 0) return;
-                    draw.setColorFilter(new PorterDuffColorFilter(bubbleRightColor, PorterDuff.Mode.SRC_IN));
+                    // If bubble color is not enabled and color is 0, skip
+                    if (!bubbleColor && bubbleRightColor == 0) {
+                        return;
+                    }
+                    // If color is 0, clear the filter; otherwise apply the color
+                    if (bubbleRightColor == 0) {
+                        draw.setColorFilter(null);
+                    } else {
+                        draw.setColorFilter(new PorterDuffColorFilter(bubbleRightColor, PorterDuff.Mode.SRC_IN));
+                    }
                 } else {
-                    if (bubbleLeftColor == 0) return;
-                    draw.setColorFilter(new PorterDuffColorFilter(bubbleLeftColor, PorterDuff.Mode.SRC_IN));
+                    // If bubble color is not enabled and color is 0, skip
+                    if (!bubbleColor && bubbleLeftColor == 0) {
+                        return;
+                    }
+                    // If color is 0, clear the filter; otherwise apply the color
+                    if (bubbleLeftColor == 0) {
+                        draw.setColorFilter(null);
+                    } else {
+                        draw.setColorFilter(new PorterDuffColorFilter(bubbleLeftColor, PorterDuff.Mode.SRC_IN));
+                    }
                 }
             }
         });
