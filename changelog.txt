@@ -1,7 +1,6 @@
 [ADDED]
-- Added support for WA/WB 2.26.13.xx and 2.26.14.xx.
+- Added support for future 3 versions of WhatsApp.
+- Changed the app's internal ID to `com.waenhancer`
 
 [FIXED]
-- Fixed GroupAdmin feature lookup for WA 2.26.14.xx.
-- Fixed Video Note button missing in attachment sheet.
-- Fixed instability and NullPointerException in media message processing.
+- Added consolidated "Video Note Features" toggle in Media settings.
