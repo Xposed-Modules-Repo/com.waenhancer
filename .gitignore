@@ -6,6 +6,7 @@
 /build
 /captures
 .externalNativeBuild
+.github/agents
 .cxx
 local.properties
 key.jks

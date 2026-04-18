@@ -225,6 +225,7 @@ public class SeparateGroup extends Feature {
         XposedBridge.hookMethod(getTabMethod, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (tabs == null || tabs.isEmpty()) return;
                 var tabId = tabs.get((int) param.args[0]).intValue();
                 if (tabId == GROUPS || tabId == CHATS) {
                     var convFragment = cFrag.newInstance();
@@ -234,6 +235,7 @@ public class SeparateGroup extends Feature {
 
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (tabs == null || tabs.isEmpty()) return;
                 var tabId = tabs.get((int) param.args[0]).intValue();
                 tabInstances.remove(tabId);
                 tabInstances.put(tabId, param.getResult());
@@ -303,11 +305,45 @@ public class SeparateGroup extends Feature {
             @Override
             @SuppressWarnings("unchecked")
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                tabs = (ArrayList<Integer>) fieldTabsList.get(null);
-                if (tabs == null) return;
+                var listObj = fieldTabsList.get(param.thisObject);
+                if (!(listObj instanceof List<?> rawList)) {
+                    XposedBridge.log("SeparateGroup: Tab list field is null or not a List");
+                    return;
+                }
+
+                ArrayList<Integer> mutableTabs;
+                if (listObj instanceof ArrayList) {
+                    mutableTabs = (ArrayList<Integer>) listObj;
+                } else {
+                    mutableTabs = new ArrayList<>();
+                    for (Object item : rawList) {
+                        if (item instanceof Integer tabId) {
+                            mutableTabs.add(tabId);
+                        }
+                    }
+                    try {
+                        fieldTabsList.set(param.thisObject, mutableTabs);
+                    } catch (Throwable throwable) {
+                        XposedBridge.log("SeparateGroup: Failed to replace tab list field: " + throwable);
+                        return;
+                    }
+                }
+
+                tabs = mutableTabs;
+                XposedBridge.log("SeparateGroup: Current tabs before: " + tabs + " (" + mutableTabs.getClass().getName() + ")");
                 if (!prefs.getBoolean("separategroups", false)) return;
-                if (!tabs.contains(GROUPS)) {
-                    tabs.add(tabs.isEmpty() ? 0 : 1, GROUPS);
+
+                // CRITICAL: Only inject if the list is valid and contains the main CHATS tab.
+                // If it's empty, we might have hooked the wrong field or are too early (causing a crash).
+                if (!tabs.isEmpty() && tabs.contains(CHATS) && !tabs.contains(GROUPS)) {
+                    tabs.add(tabs.indexOf(CHATS) + 1, GROUPS);
+                    XposedBridge.log("SeparateGroup: Injected GROUPS tab. Current tabs: " + tabs);
+                } else if (tabs.isEmpty()) {
+                    XposedBridge.log("SeparateGroup: Skipping injection (list is empty)");
+                } else if (!tabs.contains(CHATS)) {
+                    XposedBridge.log("SeparateGroup: Skipping injection (CHATS tab not found). Current tabs: " + tabs);
+                } else {
+                    XposedBridge.log("SeparateGroup: Skipping injection (GROUPS tab already present). Current tabs: " + tabs);
                 }
             }
         });
