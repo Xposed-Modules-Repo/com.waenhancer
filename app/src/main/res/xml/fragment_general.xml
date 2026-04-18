@@ -2,17 +2,17 @@
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <Preference
-        app:fragment="com.wmods.wppenhacer.ui.fragments.GeneralFragment$HomeGeneralPreference"
+        app:fragment="com.waenhancer.ui.fragments.GeneralFragment$HomeGeneralPreference"
         app:iconSpaceReserved="false"
         app:title="@string/general" />
 
     <Preference
-        app:fragment="com.wmods.wppenhacer.ui.fragments.GeneralFragment$HomeScreenGeneralPreference"
+        app:fragment="com.waenhancer.ui.fragments.GeneralFragment$HomeScreenGeneralPreference"
         app:iconSpaceReserved="false"
         app:title="@string/home_screen" />
 
     <Preference
-        app:fragment="com.wmods.wppenhacer.ui.fragments.GeneralFragment$ConversationGeneralPreference"
+        app:fragment="com.waenhancer.ui.fragments.GeneralFragment$ConversationGeneralPreference"
         app:iconSpaceReserved="false"
         app:title="@string/conversation" />
 

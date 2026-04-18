@@ -46,7 +46,7 @@
             app:summary="@string/wallpaper_in_home_screen_sum"
             app:title="@string/wallpaper_in_home_screen" />
 
-        <com.wmods.wppenhacer.preference.FileSelectPreference
+        <com.waenhancer.preference.FileSelectPreference
             android:entryValues="@array/image_picker"
             android:summary="@string/wallpaper_not_selected"
             app:dependency="wallpaper"
@@ -112,7 +112,7 @@
             app:key="change_dpi"
             app:title="@string/change_default_dpi" />
 
-        <com.wmods.wppenhacer.preference.ThemePreference
+        <com.waenhancer.preference.ThemePreference
             android:key="folder_theme"
             app:dependency="custom_filters"
             android:summary="@string/manage_theme_sum"

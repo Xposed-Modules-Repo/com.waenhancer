@@ -152,13 +152,13 @@
             app:summary="@string/call_blocking_type_sum"
             app:title="@string/call_blocking_type" />
 
-        <com.wmods.wppenhacer.preference.ContactPickerPreference
+        <com.waenhancer.preference.ContactPickerPreference
             android:key="call_block_contacts"
             android:title="@string/contact_block_list"
             app:summaryOff="@string/no_contacts_selected"
             app:summaryOn="@string/contact_were_selected" />
 
-        <com.wmods.wppenhacer.preference.ContactPickerPreference
+        <com.waenhancer.preference.ContactPickerPreference
             android:key="call_white_contacts"
             android:title="@string/contact_white_list"
             app:summaryOff="@string/no_contacts_selected"

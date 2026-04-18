@@ -17,7 +17,7 @@
         app:iconSpaceReserved="false"
         app:title="@string/download_title">
 
-        <com.wmods.wppenhacer.preference.FileSelectPreference
+        <com.waenhancer.preference.FileSelectPreference
             android:defaultValue="/sdcard/Download"
             app:directory="true"
             app:key="download_local"
@@ -44,7 +44,7 @@
             app:summary="@string/auto_status_forward_sum"
             app:title="@string/auto_status_forward" />
 
-        <com.wmods.wppenhacer.preference.StatusForwardRulesPreference
+        <com.waenhancer.preference.StatusForwardRulesPreference
             app:dependency="auto_status_forward"
             app:key="auto_status_forward_rules_pref"
             app:title="@string/auto_status_forward_rules" />
@@ -55,7 +55,7 @@
         app:iconSpaceReserved="false"
         app:title="@string/title_video">
 
-        <com.wmods.wppenhacer.preference.FloatSeekBarPreference
+        <com.waenhancer.preference.FloatSeekBarPreference
             android:defaultValue="60"
             app:key="video_limit_size"
             app:maxValue="90"
@@ -95,7 +95,7 @@
             app:summary="@string/call_recording_enable_sum"
             app:title="@string/call_recording_enable" />
 
-        <com.wmods.wppenhacer.preference.FileSelectPreference
+        <com.waenhancer.preference.FileSelectPreference
             android:defaultValue="/sdcard/Music/WaEnhancer/Recordings"
             app:dependency="call_recording_enable"
             app:directory="true"
@@ -108,14 +108,14 @@
             app:title="@string/call_recording_settings"
             app:summary="Configure Audio Source and Root options" />
 
-        <com.wmods.wppenhacer.preference.ContactPickerPreference
+        <com.waenhancer.preference.ContactPickerPreference
             android:key="call_recording_blacklist"
             android:dependency="call_recording_enable"
             android:title="@string/recording_excluded_contacts"
             app:summaryOff="@string/no_contacts_selected"
             app:summaryOn="@string/contact_were_selected" />
 
-        <com.wmods.wppenhacer.preference.ContactPickerPreference
+        <com.waenhancer.preference.ContactPickerPreference
             android:key="call_recording_whitelist"
             android:dependency="call_recording_enable"
             android:title="@string/recording_included_contacts"
@@ -152,7 +152,7 @@
             app:key="audio_type"
             app:title="@string/send_audio_as_voice_audio_note" />
 
-        <com.wmods.wppenhacer.preference.FloatSeekBarPreference
+        <com.waenhancer.preference.FloatSeekBarPreference
             android:defaultValue="2"
             app:key="voicenote_speed"
             app:maxValue="5"

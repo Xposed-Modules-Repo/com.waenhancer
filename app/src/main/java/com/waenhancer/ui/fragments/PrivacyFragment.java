@@ -1,0 +1,71 @@
+package com.waenhancer.ui.fragments;
+
+import static com.waenhancer.preference.ContactPickerPreference.REQUEST_CONTACT_PICKER;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.View;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.waenhancer.R;
+import com.waenhancer.preference.ContactPickerPreference;
+import com.waenhancer.preference.FileSelectPreference;
+import com.waenhancer.ui.fragments.base.BasePreferenceFragment;
+import com.waenhancer.xposed.features.general.LiteMode;
+
+public class PrivacyFragment extends BasePreferenceFragment {
+
+    @Override
+    public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
+        super.onCreatePreferences(savedInstanceState, rootKey);
+        setPreferencesFromResource(R.xml.fragment_privacy, rootKey);
+
+        findPreference("open_deleted_messages").setOnPreferenceClickListener(preference -> {
+            startActivity(new Intent(requireContext(), com.waenhancer.activities.DeletedMessagesActivity.class));
+            return true;
+        });
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        setDisplayHomeAsUpEnabled(false);
+    }
+
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        System.out.println("onActivityResult: " + requestCode + " " + resultCode + " " + data);
+        if (requestCode == REQUEST_CONTACT_PICKER && resultCode == Activity.RESULT_OK) {
+            ContactPickerPreference contactPickerPref = findPreference(data.getStringExtra("key"));
+            if (contactPickerPref != null) {
+                contactPickerPref.handleActivityResult(requestCode, resultCode, data);
+            }
+        } else if (requestCode == LiteMode.REQUEST_FOLDER && resultCode == Activity.RESULT_OK) {
+            FileSelectPreference fileSelectPreference = findPreference(data.getStringExtra("key"));
+            if (fileSelectPreference != null) {
+                fileSelectPreference.handleActivityResult(requestCode, resultCode, data);
+            }
+        }
+    }
+    
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        
+        // Handle scroll to preference from search
+        if (getActivity() != null && getActivity().getIntent() != null) {
+            String scrollToKey = getActivity().getIntent().getStringExtra("scroll_to_preference");
+            if (scrollToKey != null) {
+                scrollToPreference(scrollToKey);
+                // Clear the intent extra
+                getActivity().getIntent().removeExtra("scroll_to_preference");
+            }
+        }
+    }
+
+}

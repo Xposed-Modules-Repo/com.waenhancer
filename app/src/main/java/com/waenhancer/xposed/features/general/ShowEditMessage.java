@@ -1,0 +1,213 @@
+package com.waenhancer.xposed.features.general;
+
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.core.widget.NestedScrollView;
+
+import com.waenhancer.adapter.MessageAdapter;
+import com.waenhancer.views.NoScrollListView;
+import com.waenhancer.xposed.core.Feature;
+import com.waenhancer.xposed.core.WppCore;
+import com.waenhancer.xposed.core.components.FMessageWpp;
+import com.waenhancer.xposed.core.db.MessageHistory;
+import com.waenhancer.xposed.core.db.MessageStore;
+import com.waenhancer.xposed.core.devkit.Unobfuscator;
+import com.waenhancer.xposed.features.listeners.ConversationItemListener;
+import com.waenhancer.xposed.utils.DesignUtils;
+import com.waenhancer.xposed.utils.ReflectionUtils;
+import com.waenhancer.xposed.utils.ResId;
+import com.waenhancer.xposed.utils.Utils;
+
+import java.util.ArrayList;
+import java.util.Objects;
+
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XSharedPreferences;
+import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
+
+public class ShowEditMessage extends Feature {
+
+    public ShowEditMessage(@NonNull ClassLoader loader, @NonNull XSharedPreferences preferences) {
+        super(loader, preferences);
+    }
+
+    @Override
+    public void doHook() throws Throwable {
+
+        if (!prefs.getBoolean("antieditmessages", false)) return;
+
+        var onMessageEdit = Unobfuscator.loadMessageEditMethod(classLoader);
+        logDebug(Unobfuscator.getMethodDescriptor(onMessageEdit));
+
+        var callerMessageEditMethod = Unobfuscator.loadCallerMessageEditMethod(classLoader);
+        logDebug(Unobfuscator.getMethodDescriptor(callerMessageEditMethod));
+
+        var getEditMessage = Unobfuscator.loadGetEditMessageMethod(classLoader);
+        logDebug(Unobfuscator.getMethodDescriptor(getEditMessage));
+
+        XposedBridge.hookMethod(onMessageEdit, new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                var editMessage = getEditMessage.invoke(null, param.args[0]);
+                if (editMessage == null) return;
+                var invoked = callerMessageEditMethod.invoke(null, param.args[0]);
+                long timestamp = XposedHelpers.getLongField(invoked, "A00");
+                var fMessage = new FMessageWpp(param.args[0]);
+                var key = fMessage.getKey();
+                if (key == null || key.messageID == null) return;
+                String messageKey = key.messageID;
+                long id = fMessage.getRowId();
+                var origMessage = MessageStore.getInstance().getCurrentMessageByID(id);
+                String newMessage = fMessage.getMessageStr();
+                if (newMessage == null) {
+                    var methods = ReflectionUtils.findAllMethodsUsingFilter(param.args[0].getClass(), method -> method.getReturnType() == String.class && ReflectionUtils.isOverridden(method));
+                    for (var method : methods) {
+                        newMessage = (String) method.invoke(param.args[0]);
+                        if (newMessage != null) break;
+                    }
+                    if (newMessage == null) return;
+                }
+                try {
+                    var message = MessageHistory.getInstance().getMessages(messageKey);
+                    if (message == null) {
+                        MessageHistory.getInstance().insertMessage(messageKey, origMessage, 0);
+                    }
+                    MessageHistory.getInstance().insertMessage(messageKey, newMessage, timestamp);
+                } catch (Exception e) {
+                    logDebug(e);
+                }
+            }
+        });
+
+        var strEmoji = "\uD83D\uDCDD";
+
+        ConversationItemListener.conversationListeners.add(
+                new ConversationItemListener.OnConversationItemListener() {
+
+                    @Override
+                    public void onItemBind(FMessageWpp fMessage, ViewGroup viewGroup) {
+                        var textView = (TextView) viewGroup.findViewById(Utils.getID("edit_label", "id"));
+                        if (textView != null) {
+                            if (!textView.getText().toString().contains(strEmoji)) {
+                                textView.getPaint().setUnderlineText(true);
+                                textView.append(strEmoji);
+                                // Set click listener once; it reads the message key tag at click time.
+                                textView.setOnClickListener((v) -> {
+                                    try {
+                                        Object tag = v.getTag();
+                                        if (!(tag instanceof String)) return;
+                                        String msgKey = (String) tag;
+                                        var messages = MessageHistory.getInstance().getMessages(msgKey);
+                                        if (messages == null) {
+                                            messages = new ArrayList<>();
+                                        }
+                                        showBottomDialog(messages);
+                                    } catch (Exception exception0) {
+                                        logDebug(exception0);
+                                    }
+                                });
+                            }
+                            // Always stamp the current message's key onto the view.
+                            // The click listener reads this tag at the moment of the tap,
+                            // so it is immune to view recycling and async post() timing.
+                            var key = fMessage.getKey();
+                            if (key != null && key.messageID != null) {
+                                textView.setTag(key.messageID);
+                            }
+                        }
+                    }
+                }
+        );
+
+    }
+
+    @SuppressLint("SetTextI18n")
+    private void showBottomDialog(ArrayList<MessageHistory.MessageItem> messages) {
+        Objects.requireNonNull(WppCore.getCurrentConversation()).runOnUiThread(() -> {
+            var ctx = (Context) WppCore.getCurrentConversation();
+
+            var dialog = WppCore.createBottomDialog(ctx);
+            // NestedScrollView
+            NestedScrollView nestedScrollView0 = new NestedScrollView(ctx, null);
+            nestedScrollView0.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            nestedScrollView0.setFillViewport(true);
+            nestedScrollView0.setFitsSystemWindows(true);
+            // Main Layout
+            LinearLayout linearLayout = new LinearLayout(ctx);
+            linearLayout.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT);
+            linearLayout.setFitsSystemWindows(true);
+            linearLayout.setMinimumHeight(layoutParams.height = Utils.getApplication().getResources().getDisplayMetrics().heightPixels / 4);
+            linearLayout.setLayoutParams(layoutParams);
+            int dip = Utils.dipToPixels(20);
+            linearLayout.setPadding(dip, dip, dip, 0);
+            var bg = DesignUtils.createDrawable("rc_dialog_bg", DesignUtils.getPrimarySurfaceColor());
+            linearLayout.setBackground(bg);
+
+            // Title View
+            TextView titleView = new TextView(ctx);
+            LinearLayout.LayoutParams layoutParams1 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            layoutParams1.weight = 1.0f;
+            layoutParams1.setMargins(0, 0, 0, Utils.dipToPixels(10));
+            titleView.setLayoutParams(layoutParams1);
+            titleView.setTextSize(16.0f);
+            titleView.setTextColor(DesignUtils.getPrimaryTextColor());
+            titleView.setTypeface(null, Typeface.BOLD);
+            titleView.setText(ResId.string.edited_history);
+
+            // List View
+            var adapter = new MessageAdapter(ctx, messages);
+            ListView listView = new NoScrollListView(ctx);
+            LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT);
+            layoutParams2.weight = 1.0f;
+            listView.setLayoutParams(layoutParams2);
+            listView.setAdapter(adapter);
+            ImageView imageView0 = new ImageView(ctx);
+            LinearLayout.LayoutParams layoutParams4 = new LinearLayout.LayoutParams(Utils.dipToPixels(70), Utils.dipToPixels(8));
+            layoutParams4.gravity = 17;
+            layoutParams4.setMargins(0, Utils.dipToPixels(5), 0, Utils.dipToPixels(5));
+            var bg2 = DesignUtils.createDrawable("rc_dotline_dialog", Color.BLACK);
+            imageView0.setBackground(DesignUtils.alphaDrawable(bg2, DesignUtils.getPrimaryTextColor(), 33));
+            imageView0.setLayoutParams(layoutParams4);
+            // Button View
+            Button okButton = new Button(ctx);
+            LinearLayout.LayoutParams layoutParams3 = new LinearLayout.LayoutParams(-1, -2);
+            layoutParams3.setMargins(0, Utils.dipToPixels(10), 0, Utils.dipToPixels(10));
+            layoutParams3.gravity = 80;
+            okButton.setLayoutParams(layoutParams3);
+            okButton.setGravity(17);
+            var drawable = DesignUtils.createDrawable("selector_bg", Color.BLACK);
+            okButton.setBackground(DesignUtils.alphaDrawable(drawable, DesignUtils.getPrimaryTextColor(), 25));
+            okButton.setText("OK");
+            okButton.setOnClickListener((View view) -> dialog.dismissDialog());
+            linearLayout.addView(imageView0);
+            linearLayout.addView(titleView);
+            linearLayout.addView(listView);
+            linearLayout.addView(okButton);
+            nestedScrollView0.addView(linearLayout);
+            dialog.setContentView(nestedScrollView0);
+            dialog.setCanceledOnTouchOutside(true);
+            dialog.showDialog();
+        });
+    }
+
+
+    @NonNull
+    @Override
+    public String getPluginName() {
+        return "Show Edit Message";
+    }
+
+}

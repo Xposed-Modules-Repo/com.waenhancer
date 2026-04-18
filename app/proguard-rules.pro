@@ -21,11 +21,11 @@
 #-renamesourcefileattribute SourceFile
 -dontwarn *
 
--keepclasseswithmembers class com.wmods.** {
+-keepclasseswithmembers class com.waenhancer.** {
      *;
 }
 
--keepclasseswithmembernames class com.wmods.**
+-keepclasseswithmembernames class com.waenhancer.**
 
 -keepclasseswithmembers class cz.vutbr.** {
      *;
