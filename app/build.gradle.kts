@@ -52,7 +52,7 @@ android {
         targetSdk = 34
         versionCode = 154
         versionName = "1.5.4-DEV ($gitHash)"
-        buildConfigField("String", "NOTICES_URL", "\"https://wae.mubashar.dev/notices.json\"")
+        buildConfigField("String", "NOTICES_URL", "\"https://waenhancer.com/notices.json\"")
         multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

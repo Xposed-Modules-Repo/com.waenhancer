@@ -67,7 +67,7 @@ public class AboutActivity extends BaseActivity {
     }
 
     private void openTelegramChannel() {
-        String channelUrl = "https://t.me/waenhancer1";
+        String channelUrl = "https://t.me/WaEnhancerApp";
         String installedPackage = Utils.getInstalledTelegramPackage(this);
 
         if (installedPackage != null) {
