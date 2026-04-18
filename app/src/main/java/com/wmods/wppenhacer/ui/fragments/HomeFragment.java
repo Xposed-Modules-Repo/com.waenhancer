@@ -172,7 +172,7 @@ public class HomeFragment extends BaseFragment {
 
         binding.githubBtn.setOnClickListener(view -> {
             animateClick(view);
-            openUrl(requireContext(), "https://github.com/mubasharhussain/WaEnhancer/discussions");
+            openUrl(requireContext(), "https://github.com/mubashardev/WaEnhancer/discussions");
         });
 
         binding.clearCacheBtn.setOnClickListener(view -> {
