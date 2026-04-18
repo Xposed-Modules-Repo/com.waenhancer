@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">在聊天列表的联系人头像右上角显示绿色在线小点\n（注意：必须在 WhatsApp 设置的“隐私”菜单中的“最后上线时间和在线状态”中对所有人开放）</string>
     <string name="show_dnd_button">显示免打扰按钮</string>
     <string name="show_dnd_button_sum">在主页工具栏上显示免打扰按钮</string>
-    <string name="dev4mod">Dev4Mod (Contributor)</string>
     <string name="disable_pinned_limit">禁用置顶限制</string>
     <string name="disable_pinned_limit_sum">禁用只能置顶三个联系人的限制</string>
     <string name="delete_for_everyone_all_messages">Increase limit of &quot;Delete for everyone&quot; option</string>

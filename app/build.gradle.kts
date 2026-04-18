@@ -15,17 +15,7 @@ kotlin {
 }
 
 
-fun getGitHashCommit(): String {
-    return try {
-        val processBuilder = ProcessBuilder("git", "rev-parse", "--short", "HEAD")
-        val process = processBuilder.start()
-        process.inputStream.bufferedReader().readText().trim()
-    } catch (e: Exception) {
-        "unknown"
-    }
-}
 
-val gitHash: String = getGitHashCommit().uppercase(Locale.getDefault())
 
 android {
     namespace = "com.waenhancer"
@@ -50,8 +40,8 @@ android {
         applicationId = "com.waenhancer"
         minSdk = 28
         targetSdk = 34
-        versionCode = 154
-        versionName = "1.5.4-DEV ($gitHash)"
+        versionCode = project.findProperty("VERSION_CODE")?.toString()?.toInt() ?: 1
+        versionName = project.findProperty("VERSION_NAME")?.toString() ?: "1.0.0"
         buildConfigField("String", "NOTICES_URL", "\"https://waenhancer.com/notices.json\"")
         multiDexEnabled = true
 

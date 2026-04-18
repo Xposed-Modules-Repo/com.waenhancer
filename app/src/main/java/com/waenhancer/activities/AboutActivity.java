@@ -58,7 +58,7 @@ public class AboutActivity extends BaseActivity {
         setContentView(binding.getRoot());
 
         binding.btnTelegram.setOnClickListener(v -> openTelegramChannel());
-        binding.btnGithub.setOnClickListener(view -> openUrl("https://github.com/mubashardev/WaEnhancer/discussions"));
+        binding.btnGithub.setOnClickListener(view -> openUrl("https://github.com/mubashardev/WaEnhancer/issues"));
 
         adapter = new ContributorAdapter();
         binding.rvContributors.setAdapter(adapter);

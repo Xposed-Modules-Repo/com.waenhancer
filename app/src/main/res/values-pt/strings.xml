@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">Mostre um ponto online verde na tela inicial\n(OBSERVAÇÃO: É necessário ativar a opção online para todos em Configurações &gt; Privacidade &gt; Visto por último e online no WhatsApp)</string>
     <string name="show_dnd_button">Mostrar botão Não perturbe</string>
     <string name="show_dnd_button_sum">Mostra uma opção para ativar o modo Não perturbe na tela inicial</string>
-    <string name="dev4mod">Dev4Mod (Desenvolvedor)</string>
     <string name="disable_pinned_limit">Desativar limite de conversas fixadas</string>
     <string name="disable_pinned_limit_sum">Desative o limite de 3 conversas fixadas</string>
     <string name="delete_for_everyone_all_messages">Excluir mensagens para todos</string>

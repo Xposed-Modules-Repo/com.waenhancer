@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">Mostra un pallino online verde nella Home (NOTA: È necessario attivare la \'Visualizzazione online per tutti\' nelle impostazioni Privacy di WhatsApp)</string>
     <string name="show_dnd_button">Mostra pulsante DND</string>
     <string name="show_dnd_button_sum">Mostra un pulsante per la Modalità Non disturbare (DND) nel menù della Home</string>
-    <string name="dev4mod">Dev4Mod (Collaboratore)</string>
     <string name="disable_pinned_limit">Disabilita limite chat fissate</string>
     <string name="disable_pinned_limit_sum">Disabilita il limite di 3 chat fissate</string>
     <string name="delete_for_everyone_all_messages">Aumenta il limite di &quot;Elimina per tutti&quot; opzione</string>

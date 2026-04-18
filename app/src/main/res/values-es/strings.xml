@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">Mostrar un punto verde online en la pantalla de inicio\n(NOTA: debes activar mostrar en línea para todos en el menú de configuración de WhatsApp)</string>
     <string name="show_dnd_button">No Molestar (DND)</string>
     <string name="show_dnd_button_sum">Habilitar botón para modo No Molestar en la barra de herramientas</string>
-    <string name="dev4mod">Dev4Mod (Contribuidor)</string>
     <string name="disable_pinned_limit">Desactivar límite de Chats Anclados</string>
     <string name="disable_pinned_limit_sum">Desactivar límite de 3 chats fijados</string>
     <string name="delete_for_everyone_all_messages">Aumentar el límite de &quot;Eliminar para todos&quot; opción</string>

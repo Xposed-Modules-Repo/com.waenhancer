@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">Zeigt einen grünen Online-Punkt auf dem Startbildschirm (NOTE: Onlineanzeige muss für jeden in den WhatsApp Privatsphäre-Einstellungen aktiviert sein)</string>
     <string name="show_dnd_button">DND</string>
     <string name="show_dnd_button_sum">Schaltfläche für \"Bitte nicht stören\" auf der Symbolleiste anzeigen</string>
-    <string name="dev4mod">Dev4Mod (Entwickler)</string>
     <string name="disable_pinned_limit">Begrenzung angepinnter Chats deaktivieren</string>
     <string name="disable_pinned_limit_sum">Das Limit von 3 angepinnten Unterhaltungen wird aufgehoben</string>
     <string name="delete_for_everyone_all_messages">Limit für &quot;löschen für alle&quot; Optionen erhöhen</string>

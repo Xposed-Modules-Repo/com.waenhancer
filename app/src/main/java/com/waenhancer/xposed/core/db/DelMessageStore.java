@@ -82,9 +82,6 @@ public class DelMessageStore extends SQLiteOpenHelper {
 
     @Override
     public void onDowngrade(SQLiteDatabase sqLiteDatabase, int oldVersion, int newVersion) {
-        // Called when a lower-versioned fork (e.g. original Dev4Mod using version 5)
-        // opens
-        // a database previously created by this fork (version 10).
         // SQLite does not support schema downgrade natively, so we drop all tables and
         // recreate the base schema. This clears the deleted-message history stored by
         // this fork, but WhatsApp's own data is in a separate database and is

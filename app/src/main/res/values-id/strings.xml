@@ -74,7 +74,6 @@
 (CATATAN: Harus mengaktifkan \"Terakhir dilihat dan online\" untuk semua orang di menu setelan privasi WhatsApp)</string>
     <string name="show_dnd_button">Tampilkan Tombol DND</string>
     <string name="show_dnd_button_sum">Tampilkan tombol mode DND di toolbar layar beranda</string>
-    <string name="dev4mod">Dev4Mod (Penyumbang)</string>
     <string name="disable_pinned_limit">Nonaktifkan Batas Pesan yang Disematkan</string>
     <string name="disable_pinned_limit_sum">Nonaktifkan batas 3 pesan yang disematkan</string>
     <string name="delete_for_everyone_all_messages">Tingkatkan batas opsi &quot;Hapus untuk semua&quot; pilih</string>

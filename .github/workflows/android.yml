@@ -44,6 +44,34 @@ jobs:
       - name: Remove local properties
         run: sed -i '/org.gradle.java.home/d' gradle.properties
 
+      - name: Auto-increment Version
+        run: |
+          # Read current values
+          VERSION_CODE=$(grep 'VERSION_CODE' gradle.properties | cut -d'=' -f2)
+          VERSION_NAME=$(grep 'VERSION_NAME' gradle.properties | cut -d'=' -f2)
+          
+          # Increment Version Code
+          NEW_VERSION_CODE=$((VERSION_CODE + 1))
+          
+          # Increment Patch Version (the last digit)
+          BASE_VERSION=$(echo $VERSION_NAME | cut -d'.' -f1,2)
+          PATCH=$(echo $VERSION_NAME | cut -d'.' -f3)
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION_NAME="$BASE_VERSION.$NEW_PATCH"
+          
+          # Update gradle.properties
+          sed -i "s/VERSION_CODE=.*/VERSION_CODE=$NEW_VERSION_CODE/" gradle.properties
+          sed -i "s/VERSION_NAME=.*/VERSION_NAME=$NEW_VERSION_NAME/" gradle.properties
+          
+          echo "Bumping version from $VERSION_NAME ($VERSION_CODE) -> $NEW_VERSION_NAME ($NEW_VERSION_CODE)"
+
+          # Commit and Push back to GitHub
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add gradle.properties
+          git commit -m "Bump version to $NEW_VERSION_NAME ($NEW_VERSION_CODE) [skip ci]"
+          git push
+
       - name: Build all flavor variants
         run: |
           ./gradlew assembleWhatsappDebug assembleBusinessDebug -Pminify=true

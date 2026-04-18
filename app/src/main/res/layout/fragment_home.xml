@@ -749,7 +749,7 @@
                             app:iconGravity="textStart"
                             app:iconSize="20dp" />
 
-                        <!-- GitHub Discussions Button -->
+                        <!-- GitHub Issues Button -->
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/githubBtn"
                             style="@style/Widget.Material3.Button.TonalButton"

@@ -37,10 +37,11 @@ public class VideoNoteAttachment extends Feature {
     @Override
     public void doHook() throws Throwable {
         prefs.reload();
-        boolean showButton = prefs.getBoolean("video_note_attachment", false);
-        boolean forceGlobal = prefs.getBoolean("send_video_as_video_note", false);
+        boolean enabled = prefs.getBoolean("send_video_as_video_note", false);
+        boolean showButton = enabled;
+        boolean forceGlobal = enabled;
 
-        if (!showButton && !forceGlobal)
+        if (!enabled)
             return;
 
         // ── 1. Inject "Video Note" button into the attachment picker ────────────

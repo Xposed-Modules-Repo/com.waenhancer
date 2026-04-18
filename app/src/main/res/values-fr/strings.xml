@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">Afficher un point vert en ligne sur l\'écran d\'accueil\n(REMARQUE : vous devez activer l\'affichage en ligne pour tout le monde dans le menu Paramètres de confidentialité de WhatsApp)</string>
     <string name="show_dnd_button">Afficher le bouton ne pas déranger</string>
     <string name="show_dnd_button_sum">Enable button to DND Mode in Toolbar</string>
-    <string name="dev4mod">Dev4Mod (Contributeur)</string>
     <string name="disable_pinned_limit">Disable Pinned Limit</string>
     <string name="disable_pinned_limit_sum">Disable pinned limit of 3 chats</string>
     <string name="delete_for_everyone_all_messages">Increase limit of &quot;Delete for everyone&quot; option</string>

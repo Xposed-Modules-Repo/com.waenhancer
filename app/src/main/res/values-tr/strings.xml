@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">Ana ekranda yeşil çevrimiçi noktası göster\n(NOT: WhatsApp Gizlilik Ayarları menüsünde çevrimiçi bilgisini herkes için etkinleştirmelisiniz)</string>
     <string name="show_dnd_button">Rahatsız Etme düğmesini göster</string>
     <string name="show_dnd_button_sum">Ana ekran araç çubuğunda Rahatsız Etme düğmesini göster</string>
-    <string name="dev4mod">Dev4Mod (Katkıda Bulunan)</string>
     <string name="disable_pinned_limit">Sabitlenmiş sohbet sınırını kaldır</string>
     <string name="disable_pinned_limit_sum">3 sabitlenmiş sohbet sınırını kaldır</string>
     <string name="delete_for_everyone_all_messages">&quot;\'Herkesten sil\'&quot; seçeneğinin sınırını artır</string>

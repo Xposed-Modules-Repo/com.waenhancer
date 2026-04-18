@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">Показывать зеленую точку онлайн на главном экране\n(ПРИМЕЧАНИЕ: необходимо активировать показ онлайн для всех в меню настроек конфиденциальности WhatsApp)</string>
     <string name="show_dnd_button">Показать кнопку \"Не беспокоить\"</string>
     <string name="show_dnd_button_sum">Показывать кнопку режима \"Не беспокоить\" на панели инструментов главного экрана</string>
-    <string name="dev4mod">Dev4mod (участник)</string>
     <string name="disable_pinned_limit">Отключить лимит закрепленных чатов</string>
     <string name="disable_pinned_limit_sum">Отключить ограничение на 3 закрепленных чата</string>
     <string name="delete_for_everyone_all_messages">Увеличить предел &quot;Удалить для всех&quot; опций</string>

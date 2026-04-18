@@ -144,7 +144,7 @@ public class HomeFragment extends BaseFragment {
                 final String finalDialogDetails = dialogDetailsHtml;
                 final String finalGithubDetails = githubDetailsMd;
 
-                String dialogMessageHtml = "This will open the WaEnhancer GitHub Discussions page to report a bug.<br><br>"
+                String dialogMessageHtml = "This will open the WaEnhancer GitHub Issues page to report a bug.<br><br>"
                         +
                         "The following information about your device and installed apps will be pre-filled in your report:<br><br>"
                         +
@@ -163,7 +163,7 @@ public class HomeFragment extends BaseFragment {
                                         "\n---\n" +
                                         "[Describe here]\n";
 
-                                String url = "https://github.com/mubashardev/WaEnhancer/discussions/new?category=q-a&title=Bug+Report&body="
+                                String url = "https://github.com/mubashardev/WaEnhancer/issues/new?title=Bug+Report&body="
                                         + java.net.URLEncoder.encode(body, "UTF-8");
                                 openUrl(requireContext(), url);
                             } catch (Exception e) {
@@ -184,7 +184,7 @@ public class HomeFragment extends BaseFragment {
 
         binding.githubBtn.setOnClickListener(view -> {
             animateClick(view);
-            openUrl(requireContext(), "https://github.com/mubashardev/WaEnhancer/discussions");
+            openUrl(requireContext(), "https://github.com/mubashardev/WaEnhancer/issues");
         });
 
         binding.clearCacheBtn.setOnClickListener(view -> {

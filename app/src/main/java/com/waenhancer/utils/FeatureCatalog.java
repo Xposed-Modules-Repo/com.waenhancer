@@ -799,6 +799,14 @@ public class FeatureCatalog {
                                 null,
                                 Arrays.asList("voice", "note", "speed")));
 
+                catalog.add(new SearchableFeature("send_video_as_video_note",
+                                context.getString(R.string.send_video_as_video_note),
+                                context.getString(R.string.send_video_as_video_note_sum),
+                                SearchableFeature.Category.MEDIA,
+                                SearchableFeature.FragmentType.MEDIA,
+                                null,
+                                Arrays.asList("video", "note", "ptv", "forward", "send", "attachment", "button", "experimental")));
+
                 catalog.add(new SearchableFeature("audio_transcription",
                                 context.getString(R.string.audio_transcription),
                                 context.getString(R.string.audio_transcription_sum),

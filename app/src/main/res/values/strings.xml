@@ -79,7 +79,7 @@
     <string name="show_online_dot_in_conversation_list_sum">Show a green online dot on home screen\n(NOTE: Must activate show online for everyone in WhatsApp\'s Privacy Settings menu)</string>
     <string name="show_dnd_button">Show DND Button</string>
     <string name="show_dnd_button_sum">Show button for DND Mode on home screen toolbar</string>
-    <string name="dev4mod">Dev4Mod (Contributor)</string>
+
     <string name="disable_pinned_limit">Disable Pinned Chats Limit</string>
     <string name="disable_pinned_limit_sum">Disable limit of 3 pinned chats</string>
     <string name="delete_for_everyone_all_messages">Increase limit of &quot;Delete for everyone&quot; option</string>
@@ -308,7 +308,7 @@
     <string name="installation">Installation</string>
     <string name="installation_desc">1. Ensure that your device is rooted.\n2. Install the Xposed Framework on your device.\n3. Download the Wa Enhancer from the Actions section.\n4. Install the Wa Enhancer APK.\n5. Enable the Wa Enhancer module in the Xposed Installer app.</string>
     <string name="go_to_telegram">Telegram Channel</string>
-    <string name="go_to_github">GitHub Discussions</string>
+    <string name="go_to_github">GitHub Issues</string>
     <string name="contributors">Contributors</string>
     <string name="support">Support</string>
     <string name="support_desc">If you encounter any issues or have questions about Wa Enhancer, please visit Telegram.</string>
@@ -486,8 +486,8 @@
     <string name="action_follow_developer">Coming soon!</string>
     <string name="video_note_attachment">[Experimental] Video Note Attachment</string>
     <string name="video_note_attachment_sum">Add a "Video Note" button to the chat attachment menu. Currently under development and may cause crashes.</string>
-    <string name="send_video_as_video_note">Send video as video note</string>
-    <string name="send_video_as_video_note_sum">Always send video media/forward as a video note (PTV)</string>
+    <string name="send_video_as_video_note">[Experimental] Video Note Features</string>
+    <string name="send_video_as_video_note_sum">Add a \"Video Note\" button to the attachment menu and allow sending shared videos as video notes</string>
 
     <string name="warning_restore">When restoring the backup all messages after the backup will be lost, are you sure you want to continue?</string>
     <string name="force_restore_backup_experimental">Force Restore Backup (Experimental)</string>

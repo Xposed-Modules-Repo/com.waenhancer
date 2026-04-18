@@ -70,7 +70,6 @@
     <string name="show_online_dot_in_conversation_list_sum">إظهار نقطة خضراء عبر الإنترنت على الشاشة الرئيسية (ملاحظة: يجب تنشيط العرض عبر الإنترنت للجميع في قائمة إعدادات الخصوصية في واتساب)</string>
     <string name="show_dnd_button">إظهار أيقونة وضع الطيران</string>
     <string name="show_dnd_button_sum">إظهار أيقونة وضع الطيران على شريط أدوات الشاشة الرئيسية</string>
-    <string name="dev4mod">(مساهم)Dev4Mod</string>
     <string name="disable_pinned_limit">تعطيل حد الدردشة المثبتة</string>
     <string name="disable_pinned_limit_sum">تعطيل حد 3 دردشة مثبتة</string>
     <string name="delete_for_everyone_all_messages">زيادة حد خِيار الحذف للجميع</string>

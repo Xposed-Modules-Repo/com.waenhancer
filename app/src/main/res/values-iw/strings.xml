@@ -71,7 +71,6 @@
     <string name="show_online_dot_in_conversation_list_sum">הצג נקודה מחובר/ת ירוקה במסך הבית\n(הערה: חייב להפעיל את המחובר/ת לכולם בתפריט הגדרות הפרטיות של ווצאפ)</string>
     <string name="show_dnd_button">הצג את לחצן DND</string>
     <string name="show_dnd_button_sum">הצג כפתור מצב טיסה במסך הבית</string>
-    <string name="dev4mod">Dev4Mod (תורם)</string>
     <string name="disable_pinned_limit">השבת את מגבלת הצ\'אטים המוצמדים</string>
     <string name="disable_pinned_limit_sum">אפשר לנעוץ צ\'אטים ללא הגבלה</string>
     <string name="delete_for_everyone_all_messages">הגדל את המגבלה של &quot;מחק לכולם&quot; אופציה</string>
