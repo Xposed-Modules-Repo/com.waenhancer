@@ -63,8 +63,30 @@ public class SeparateGroup extends Feature {
 
     public void doHook() throws Exception {
 
+        // Temporarily force-disable Separate Groups feature (user requested).
+        // Use a runtime condition to avoid compile-time unreachable-code errors.
+        if (System.currentTimeMillis() > 0) {
+            XposedBridge.log("SeparateGroup: Force-disabled by Wa Enhancer (temporary). Skipping hooks.");
+            return;
+        }
+
         var cFragClass = XposedHelpers.findClass("com.whatsapp.conversationslist.ConversationsFragment", classLoader);
         var homeActivityClass = WppCore.getHomeActivityClass(classLoader);
+        // If the installed WhatsApp version is >= 2.26.13, disable this feature (recent WA update)
+        try {
+            String waVersion = "";
+            try {
+                var pm = Utils.getApplication().getPackageManager();
+                var pInfo = pm.getPackageInfo("com.whatsapp", 0);
+                if (pInfo != null && pInfo.versionName != null) waVersion = pInfo.versionName;
+            } catch (Throwable ignored) {
+            }
+            if (!waVersion.isEmpty() && isVersionAtLeast(waVersion, 2, 26, 13)) {
+                XposedBridge.log("SeparateGroup: Disabled due to WhatsApp version " + waVersion);
+                return;
+            }
+        } catch (Throwable ignored) {
+        }
 
         if (!prefs.getBoolean("separategroups", false)) return;
         featureEnabled = true;
@@ -720,6 +742,25 @@ public class SeparateGroup extends Feature {
         }
         chatTabId = tabs.get(0);
         return chatTabId;
+    }
+
+    private boolean isVersionAtLeast(String versionName, int major, int minor, int patch) {
+        if (versionName == null) return false;
+        try {
+            String[] parts = versionName.split("[^0-9]+");
+            int[] nums = new int[]{0, 0, 0};
+            int idx = 0;
+            for (String p : parts) {
+                if (p == null || p.isEmpty()) continue;
+                if (idx < 3) nums[idx++] = Integer.parseInt(p);
+                else break;
+            }
+            if (nums[0] != major) return nums[0] > major;
+            if (nums[1] != minor) return nums[1] > minor;
+            return nums[2] >= patch;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private TabListRef findTabListRef(@NonNull Object root) {

@@ -219,7 +219,16 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         setPreferenceState("filtergroups", !separategroups);
 
         var filtergroups = mPrefs.getBoolean("filtergroups", false);
-        setPreferenceState("separategroups", !filtergroups);
+
+        // Temporarily disable Separate Groups feature in settings and show explanation
+        boolean disableSeparateGroups = true;
+        var sepPref = findPreference("separategroups");
+        if (sepPref != null) {
+            setPreferenceState("separategroups", false);
+            sepPref.setSummary(getString(com.waenhancer.R.string.separate_groups_sum) + "\n\n" + getString(com.waenhancer.R.string.separate_groups_disabled_wa_update));
+        } else {
+            setPreferenceState("separategroups", false);
+        }
 
         var callBlockContacts = findPreference("call_block_contacts");
         var callWhiteContacts = findPreference("call_white_contacts");
@@ -254,6 +263,25 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         var actionButtons = getActivity().findViewById(com.waenhancer.R.id.action_buttons);
         if (actionButtons != null) {
             actionButtons.setVisibility(enabled ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private boolean isVersionAtLeast(String versionName, int major, int minor, int patch) {
+        if (versionName == null) return false;
+        try {
+            String[] parts = versionName.split("[^0-9]+");
+            int[] nums = new int[]{0, 0, 0};
+            int idx = 0;
+            for (String p : parts) {
+                if (p == null || p.isEmpty()) continue;
+                if (idx < 3) nums[idx++] = Integer.parseInt(p);
+                else break;
+            }
+            if (nums[0] != major) return nums[0] > major;
+            if (nums[1] != minor) return nums[1] > minor;
+            return nums[2] >= patch;
+        } catch (Exception e) {
+            return false;
         }
     }
 

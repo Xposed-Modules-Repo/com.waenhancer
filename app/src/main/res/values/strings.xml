@@ -67,6 +67,7 @@
     <string name="downloadviewonce_sum">Show button to download view once media</string>
     <string name="separate_groups">Separate Groups</string>
     <string name="separate_groups_sum">Separate your chats by: Groups, Private Chats, Status, Calls, Communities</string>
+    <string name="separate_groups_disabled_wa_update">Currently disabled due to a recent WhatsApp update (2.26.13.xx or greater).</string>
     <string name="blueonreply">Send Blue Ticks upon Reply</string>
     <string name="blueonreply_sum">Sends blue ticks after replying to a message\n(NOTE: Must have \"Hide Blue Ticks\" active)</string>
     <string name="hide_archived_chat">Hide Archived Chats</string>
