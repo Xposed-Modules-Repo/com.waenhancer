@@ -56,7 +56,8 @@ public class SeparateGroup extends Feature {
         var cFragClass = XposedHelpers.findClass("com.whatsapp.conversationslist.ConversationsFragment", classLoader);
         var homeActivityClass = WppCore.getHomeActivityClass(classLoader);
 
-        if (!prefs.getBoolean("separategroups", false)) return;
+        // Enable for testing - will be disabled by default in production
+        if (!prefs.getBoolean("separategroups", true)) return;
 
         featureEnabled = true;
         statusFallbackMode = false;
@@ -380,18 +381,33 @@ public class SeparateGroup extends Feature {
     private List filterChat(Object convFragment, List chatsList) {
         try {
             var resolvedTabId = resolveChatTabId();
-            if (convFragment instanceof java.util.LinkedHashSet || tabInstances.isEmpty()) return chatsList;
+            if (convFragment instanceof java.util.LinkedHashSet) {
+                XposedBridge.log("SeparateGroup: filterChat skipping LinkedHashSet");
+                return chatsList;
+            }
+            if (tabInstances.isEmpty()) {
+                XposedBridge.log("SeparateGroup: filterChat - tabInstances empty, returning all chats");
+                return chatsList;
+            }
+
+            XposedBridge.log("SeparateGroup: filterChat called with fragment=" + convFragment.getClass().getSimpleName() + ", resolvedTabId=" + resolvedTabId + ", tabInstances=" + tabInstances.keySet());
 
             if (tabInstances.containsKey(GROUPS) && Objects.equals(tabInstances.get(GROUPS), convFragment)) {
+                XposedBridge.log("SeparateGroup: Filtering for GROUPS tab");
                 return filterChatByGroup(chatsList, true);
             }
             if (Objects.equals(tabInstances.get(resolvedTabId), convFragment) || Objects.equals(tabInstances.get(CHATS), convFragment)) {
+                XposedBridge.log("SeparateGroup: Filtering for CHATS tab (resolvedTabId=" + resolvedTabId + ")");
                 return filterChatByGroup(chatsList, false);
             }
             if (statusFallbackMode && tabInstances.containsKey(fallbackGroupTabId) && Objects.equals(tabInstances.get(fallbackGroupTabId), convFragment)) {
+                XposedBridge.log("SeparateGroup: Filtering for fallbackGroupTabId=" + fallbackGroupTabId);
                 return filterChatByGroup(chatsList, true);
             }
+            
+            XposedBridge.log("SeparateGroup: filterChat - no matching tabInstance found, returning all chats");
         } catch (Throwable ignored) {
+            XposedBridge.log("SeparateGroup: filterChat exception: " + ignored);
         }
         return chatsList;
     }
@@ -468,6 +484,8 @@ public class SeparateGroup extends Feature {
                 return;
             }
 
+            XposedBridge.log("SeparateGroup: Found tab list with " + rawList.size() + " items");
+
             boolean allNumeric = true;
             for (Object item : rawList) {
                 if (!(item instanceof Integer) && !(item instanceof Number)) {
@@ -476,7 +494,7 @@ public class SeparateGroup extends Feature {
                 }
             }
             if (!rawList.isEmpty() && !allNumeric) {
-                XposedBridge.log("SeparateGroup: Skipping field injection (object-backed tabs)");
+                XposedBridge.log("SeparateGroup: Tabs are object-backed (not numeric)");
                 enableStatusFallback(rawList, "field object-backed list");
                 return;
             }
@@ -492,14 +510,14 @@ public class SeparateGroup extends Feature {
             tabs = mutableTabs;
             statusFallbackMode = false;
             var resolvedChatTabId = resolveChatTabId();
-            XposedBridge.log("SeparateGroup: Current tabs before: " + tabs + " (field=" + listField.getName() + ", chatTabId=" + resolvedChatTabId + ")");
+            XposedBridge.log("SeparateGroup: Current tabs before injection: " + tabs + " (chatTabId=" + resolvedChatTabId + ")");
 
             if (!tabs.isEmpty() && tabs.contains(resolvedChatTabId) && !tabs.contains(GROUPS)) {
                 tabs.add(tabs.indexOf(resolvedChatTabId) + 1, GROUPS);
                 XposedBridge.log("SeparateGroup: Injected GROUPS tab. Current tabs: " + tabs);
             } else if (!tabs.isEmpty() && !tabs.contains(GROUPS)) {
                 tabs.add(1 <= tabs.size() ? 1 : 0, GROUPS);
-                XposedBridge.log("SeparateGroup: Injected GROUPS tab using fallback position. Current tabs: " + tabs);
+                XposedBridge.log("SeparateGroup: Injected GROUPS tab at fallback position. Current tabs: " + tabs);
             } else if (tabs.isEmpty()) {
                 XposedBridge.log("SeparateGroup: Skipping injection (list is empty)");
             } else if (!tabs.contains(resolvedChatTabId)) {
@@ -509,6 +527,7 @@ public class SeparateGroup extends Feature {
             }
         } catch (Throwable throwable) {
             XposedBridge.log("SeparateGroup: Injection failed: " + throwable);
+            throwable.printStackTrace();
         }
     }
 
