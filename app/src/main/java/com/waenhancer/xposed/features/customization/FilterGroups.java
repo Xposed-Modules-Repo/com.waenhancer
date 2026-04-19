@@ -28,6 +28,7 @@ import com.waenhancer.xposed.utils.Utils;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Objects;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
@@ -199,18 +200,26 @@ public class FilterGroups extends Feature {
             int index = -1;
             for (var item : list) {
                 if (item == null) continue;
-                if (item.toString().contains(name)) {
+                var fieldName = XposedHelpers.getObjectField(item, "A01");
+                if (Objects.equals(name, fieldName) || (fieldName == null && item.toString().contains(name))) {
                     index = list.indexOf(item);
                     break;
                 }
             }
-            if (index == -1) return;
+            if (index == -1 && list.size() > position) {
+                index = position;
+                XposedBridge.log("FilterGroups: falling back to filter index " + index + " for " + name);
+            }
+            if (index == -1) {
+                XposedBridge.log("FilterGroups: filter entry not found for " + name);
+                return;
+            }
             ReflectionUtils.callMethod(methodSetFilter, mFilterInstance, index);
         } catch (Exception e) {
             logDebug(e);
         }
     }
-    
+
     @NonNull
     @Override
     public String getPluginName() {

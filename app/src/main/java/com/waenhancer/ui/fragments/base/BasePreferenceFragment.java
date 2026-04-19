@@ -22,6 +22,8 @@ import androidx.preference.PreferenceManager;
 
 import com.waenhancer.App;
 import com.waenhancer.BuildConfig;
+import com.waenhancer.R;
+import com.waenhancer.xposed.core.FeatureLoader;
 import com.waenhancer.xposed.utils.Utils;
 
 import java.util.Objects;
@@ -230,6 +232,14 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
             setPreferenceState("separategroups", false);
         }
 
+        var supported = isSeparateGroupSupported();
+        updateGroupPref("separategroups", supported, R.string.separate_groups_sum, R.string.separate_groups_unsupported_sum);
+        var filterGroupsPreference = findPreference("filtergroups");
+        if (filterGroupsPreference != null) {
+            filterGroupsPreference.setEnabled(true);
+            filterGroupsPreference.setSummary(R.string.new_ui_group_filter_sum);
+        }
+
         var callBlockContacts = findPreference("call_block_contacts");
         var callWhiteContacts = findPreference("call_white_contacts");
         if (callBlockContacts != null && callWhiteContacts != null) {
@@ -249,6 +259,44 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
                     break;
             }
 
+        }
+    }
+
+    private boolean isSeparateGroupSupported() {
+        try {
+            var packageInfo = requireContext().getPackageManager().getPackageInfo(FeatureLoader.PACKAGE_WPP, 0);
+            return isVersionAtMost(packageInfo.versionName, 2, 26, 12);
+        } catch (Exception ignored) {
+            return true;
+        }
+    }
+
+    private void updateGroupPref(String key, boolean supported, int supportedSummary, int unsupportedSummary) {
+        var pref = findPreference(key);
+        if (pref == null) return;
+        if (supported) {
+            pref.setEnabled(true);
+            pref.setSummary(supportedSummary);
+            return;
+        }
+        mPrefs.edit().putBoolean(key, false).apply();
+        setPreferenceState(key, false);
+        pref.setSummary(unsupportedSummary);
+    }
+
+    private boolean isVersionAtMost(String versionName, int major, int minor, int patch) {
+        if (versionName == null) return true;
+        var parts = versionName.split("\\.");
+        if (parts.length < 3) return true;
+        try {
+            int vMajor = Integer.parseInt(parts[0]);
+            int vMinor = Integer.parseInt(parts[1]);
+            int vPatch = Integer.parseInt(parts[2]);
+            if (vMajor != major) return vMajor < major;
+            if (vMinor != minor) return vMinor < minor;
+            return vPatch <= patch;
+        } catch (NumberFormatException ignored) {
+            return true;
         }
     }
 

@@ -68,6 +68,8 @@
     <string name="separate_groups">Separate Groups</string>
     <string name="separate_groups_sum">Separate your chats by: Groups, Private Chats, Status, Calls, Communities</string>
     <string name="separate_groups_disabled_wa_update">Currently disabled due to a recent WhatsApp update (2.26.13.xx or greater).</string>
+    <string name="separate_groups_unsupported_sum">WhatsApp updated and disabled the runtime hooks needed for Separate Groups. This feature is temporarily disabled on your version.</string>
+    <string name="new_ui_group_filter_unsupported_sum">WhatsApp updated and disabled the runtime hooks needed for the new group filter UI. This feature is temporarily disabled on your version.</string>
     <string name="blueonreply">Send Blue Ticks upon Reply</string>
     <string name="blueonreply_sum">Sends blue ticks after replying to a message\n(NOTE: Must have \"Hide Blue Ticks\" active)</string>
     <string name="hide_archived_chat">Hide Archived Chats</string>
@@ -256,7 +258,7 @@
     <string name="enable_media_preview">Enable Media Preview</string>
     <string name="enable_media_preview_sum">Add a button to preview media in a temporary file (without downloading it permanently)</string>
     <string name="new_ui_group_filter">New UI Group Filter</string>
-    <string name="new_ui_group_filter_sum">Include a new filter on the home screen to separate groups and conversations.</string>
+    <string name="new_ui_group_filter_sum">Experimental: includes a new filter on the home screen to separate groups and conversations. It may be unstable.</string>
     <string name="call_blocking_type">Call blocking type</string>
     <string name="call_blocking_type_sum">Select the method by which the call blocking will be done.</string>
     <string name="call_type_buttons_no_internet">No internet (\"Calling\")</string>
