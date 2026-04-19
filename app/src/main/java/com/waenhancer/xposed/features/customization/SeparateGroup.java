@@ -506,6 +506,17 @@ public class SeparateGroup extends Feature {
             if (!loggedTabListSearchShape) {
                 loggedTabListSearchShape = true;
                 XposedBridge.log("SeparateGroup: Tab-list search failed for class " + homeInstance.getClass().getName());
+                XposedBridge.log("SeparateGroup: Using fallback tab configuration");
+            }
+            // Fallback: create default tab configuration
+            if (tabs.isEmpty()) {
+                tabs.clear();
+                tabs.add(CHATS);
+                tabs.add(GROUPS);
+                tabs.add(STATUS);
+                tabs.add(400); // CALLS
+                tabs.add(600); // COMMUNITY
+                XposedBridge.log("SeparateGroup: Created fallback tabs: " + tabs);
             }
             return;
         }
