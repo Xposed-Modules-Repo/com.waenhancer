@@ -177,8 +177,12 @@ public class SeparateGroup extends Feature {
         XposedBridge.hookMethod(tabNameMethod, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                var tab = (int) param.args[0];
-                if (tab == GROUPS) {
+                var tabIndex = (int) param.args[0];
+                if (tabs == null || tabs.isEmpty() || tabIndex >= tabs.size()) {
+                    return;
+                }
+                var tabId = tabs.get(tabIndex);
+                if (tabId == GROUPS) {
                     param.setResult(UnobfuscatorCache.getInstance().getString("groups"));
                 }
             }
