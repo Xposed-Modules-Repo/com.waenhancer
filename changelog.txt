@@ -1,6 +1,5 @@
-[FIXED]
-- Fixed GroupAdmin error on app startup and GroupAdmin indicator not working issue
-- Fixed Separate Groups tab injection to support non-ArrayList List implementations with enhanced diagnostic logging.
-- Fixed message bubble color transparency not working when default color is selected.
 
-Note: If 100% transparency of bubble color not working for you, simply change the default color to any other keeping 100% transparency.
+[FIXED]
+- Fixed GroupAdmin error
+- Temporarily disabled seperate Group tab in unsupported WhatsApp versions due to their new design architecture.
+- Improved performance
