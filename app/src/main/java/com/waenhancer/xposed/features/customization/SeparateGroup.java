@@ -21,6 +21,7 @@ import com.waenhancer.xposed.utils.ReflectionUtils;
 import com.waenhancer.xposed.utils.Utils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -60,8 +61,8 @@ public class SeparateGroup extends Feature {
             // Populate the static tabs list  
             hookTabList(homeActivityClass);
 
-            // Don't try to inject actual tab - just keep static list for reference
-            // hookOnResume(homeActivityClass);
+            // Inject actual tab after UI init
+            hookOnResume(homeActivityClass);
 
             // Setting group icon - DISABLED for now due to crashes
             // hookTabIcon();
@@ -72,7 +73,7 @@ public class SeparateGroup extends Feature {
             // Setting group tab name
             hookTabName();
 
-            // Setting tab count
+            // Setting tab count badges
             hookTabCount();
         } catch (Exception e) {
             XposedBridge.log("SeparateGroup: Error during hook setup: " + e);
@@ -84,6 +85,42 @@ public class SeparateGroup extends Feature {
     @Override
     public String getPluginName() {
         return "Separate Group";
+    }
+
+    private void hookAdapterGetCount() {
+        try {
+            // The adapter's getCount() method tells ViewPager how many tabs exist
+            // Hook PagerAdapter.getCount() from androidx (wrapped in exception handler)
+            try {
+                var pagerAdapterClass = XposedHelpers.findClass("androidx.viewpager.widget.PagerAdapter", classLoader);
+                try {
+                    var getCountMethod = XposedHelpers.findMethodExact(pagerAdapterClass, "getCount");
+                    
+                    XposedBridge.hookMethod(getCountMethod, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            try {
+                                if (!prefs.getBoolean("separategroups", false)) return;
+                                int count = (Integer) param.getResult();
+                                if (count == 4 && tabs.size() == 5) {
+                                    param.setResult(5);
+                                    XposedBridge.log("SeparateGroup: PagerAdapter.getCount() returning 5 instead of 4");
+                                }
+                            } catch (Exception e) {
+                                // Ignore errors in hook execution
+                            }
+                        }
+                    });
+                    XposedBridge.log("SeparateGroup: Hooked androidx.viewpager.widget.PagerAdapter.getCount");
+                } catch (Exception e) {
+                    XposedBridge.log("SeparateGroup: Could not find/hook getCount method: " + e.getMessage());
+                }
+            } catch (Exception e) {
+                XposedBridge.log("SeparateGroup: PagerAdapter class not available");
+            }
+        } catch (Exception e) {
+            XposedBridge.log("SeparateGroup: Exception in hookAdapterGetCount: " + e.getMessage());
+        }
     }
 
     private void hookTabCount() throws Exception {
@@ -314,33 +351,18 @@ public class SeparateGroup extends Feature {
     }
 
     private void hookOnResume(@NonNull Class<?> home) throws Exception {
-        var onResumeMethod = XposedHelpers.findMethodExact(home, "onResume");
-        XposedBridge.hookMethod(onResumeMethod, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                try {
-                    if (!prefs.getBoolean("separategroups", false)) return;
-                    
-                    XposedBridge.log("SeparateGroup: onResume called, attempting to inject GROUPS tab");
-                    
-                    var fieldTabsList = ReflectionUtils.getFieldByExtendType(home, List.class);
-                    if (fieldTabsList == null) return;
-                    
-                    var listObj = fieldTabsList.get(param.thisObject);
-                    if (!(listObj instanceof ArrayList)) return;
-                    
-                    ArrayList<Integer> currentList = (ArrayList<Integer>) listObj;
-                    if (!currentList.contains(GROUPS) && currentList.contains(CHATS)) {
-                        int insertPos = currentList.indexOf(CHATS) + 1;
-                        currentList.add(insertPos, GROUPS);
-                        tabs = new ArrayList<>(currentList);
-                        XposedBridge.log("SeparateGroup: onResume injected GROUPS tab. New tabs: " + tabs);
-                    }
-                } catch (Exception e) {
-                    XposedBridge.log("SeparateGroup: Exception in onResume: " + e.getMessage());
+        // Hook onCreate to set up initial state
+        try {
+            var onCreateMethod = XposedHelpers.findMethodExact(home, "onCreate", android.os.Bundle.class);
+            XposedBridge.hookMethod(onCreateMethod, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    XposedBridge.log("SeparateGroup: onCreate complete");
                 }
-            }
-        });
+            });
+        } catch (Exception e) {
+            XposedBridge.log("SeparateGroup: Could not hook onCreate: " + e.getMessage());
+        }
     }
 
     private void hookTabList(@NonNull Class<?> home) throws Exception {
@@ -356,6 +378,8 @@ public class SeparateGroup extends Feature {
             @SuppressWarnings("unchecked")
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 try {
+                    if (!prefs.getBoolean("separategroups", false)) return;
+                    
                     var listObj = fieldTabsList.get(param.thisObject);
                     if (!(listObj instanceof List<?> rawList)) {
                         return;
@@ -368,11 +392,12 @@ public class SeparateGroup extends Feature {
                         }
                     }
 
-                    // Populate static tabs list with GROUPS for reference
+                    // Only populate static tabs list with GROUPS - don't modify actual list
+                    // The actual list will be accessed later via getCount() etc which we intercept
                     if (!currentTabs.isEmpty() && currentTabs.contains(CHATS) && !currentTabs.contains(GROUPS)) {
                         tabs = new ArrayList<>(currentTabs);
                         tabs.add(tabs.indexOf(CHATS) + 1, GROUPS);
-                        XposedBridge.log("SeparateGroup: Tabs initialized with GROUPS: " + tabs);
+                        XposedBridge.log("SeparateGroup: [hookTabList] Static tabs initialized with GROUPS: " + tabs);
                     } else {
                         tabs = new ArrayList<>(currentTabs);
                     }
