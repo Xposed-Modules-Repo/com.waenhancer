@@ -20,6 +20,8 @@ import com.waenhancer.xposed.utils.DebugUtils;
 import com.waenhancer.xposed.utils.ReflectionUtils;
 import com.waenhancer.xposed.utils.Utils;
 
+import org.luckypray.dexkit.query.enums.StringMatchType;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -435,13 +437,29 @@ public class SeparateGroup extends Feature {
                     return chats;
                 }
                 
+                // Find the Jid class dynamically (handles obfuscation)
+                Class<?> jidClass = null;
+                try {
+                    jidClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "jid.Jid");
+                    XposedBridge.log("SeparateGroup: Found Jid class: " + jidClass.getName());
+                } catch (Throwable e) {
+                    XposedBridge.log("SeparateGroup: Could not find Jid class: " + e);
+                    // If we can't find the class, just return all chats
+                    return chats;
+                }
+                
+                if (jidClass == null) {
+                    XposedBridge.log("SeparateGroup: filterChatByGroup - Jid class is null, returning all chats");
+                    return chats;
+                }
+                
                 int successCount = 0;
                 int skipCount = 0;
                 
                 for (Object chat : chats) {
                     try {
-                        // Get jid from chat object
-                        var jidField = ReflectionUtils.getFieldByType(chat.getClass(), "com.whatsapp.jid.Jid");
+                        // Get jid field by type (now using discovered class)
+                        var jidField = ReflectionUtils.getFieldByType(chat.getClass(), jidClass);
                         if (jidField == null) {
                             skipCount++;
                             continue;
@@ -473,9 +491,10 @@ public class SeparateGroup extends Feature {
                             successCount++;
                         }
                     } catch (Throwable e) {
-                        XposedBridge.log("SeparateGroup: filterChatByGroup - Error processing chat: " + e);
-                        skipCount++;
-                        continue;
+                        // On first error, log it and return all chats  to be safe
+                        XposedBridge.log("SeparateGroup: filterChatByGroup - Error processing chat, falling back: " + e);
+                        XposedBridge.log("SeparateGroup: filterChatByGroup will return all chats for safety");
+                        return chats;
                     }
                 }
                 
