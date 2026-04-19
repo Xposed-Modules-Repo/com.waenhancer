@@ -56,10 +56,7 @@ public class SeparateGroup extends Feature {
         var cFragClass = XposedHelpers.findClass("com.whatsapp.conversationslist.ConversationsFragment", classLoader);
         var homeActivityClass = WppCore.getHomeActivityClass(classLoader);
 
-        // For testing: enable the feature (user requested to test it)
-        boolean shouldEnable = prefs.getBoolean("separategroups", true); // Default to true for testing
-
-        if (!shouldEnable) return;
+        if (!prefs.getBoolean("separategroups", false)) return;
 
         featureEnabled = true;
         statusFallbackMode = false;
