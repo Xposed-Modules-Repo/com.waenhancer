@@ -380,6 +380,12 @@ public class SeparateGroup extends Feature {
 
     private List filterChat(Object convFragment, List chatsList) {
         try {
+            // Safety check: if tabs list is not properly populated, don't filter
+            if (tabs == null || tabs.isEmpty()) {
+                XposedBridge.log("SeparateGroup: filterChat - tabs list not populated, returning all chats");
+                return chatsList;
+            }
+            
             var resolvedTabId = resolveChatTabId();
             if (convFragment instanceof java.util.LinkedHashSet) {
                 XposedBridge.log("SeparateGroup: filterChat skipping LinkedHashSet");
@@ -390,24 +396,31 @@ public class SeparateGroup extends Feature {
                 return chatsList;
             }
 
-            XposedBridge.log("SeparateGroup: filterChat called with fragment=" + convFragment.getClass().getSimpleName() + ", resolvedTabId=" + resolvedTabId + ", tabInstances=" + tabInstances.keySet());
+            XposedBridge.log("SeparateGroup: filterChat called with fragment=" + convFragment.getClass().getSimpleName() + ", resolvedTabId=" + resolvedTabId + ", tabInstances=" + tabInstances.keySet() + ", tabs=" + tabs);
 
             if (tabInstances.containsKey(GROUPS) && Objects.equals(tabInstances.get(GROUPS), convFragment)) {
                 XposedBridge.log("SeparateGroup: Filtering for GROUPS tab");
-                return filterChatByGroup(chatsList, true);
+                var filtered = filterChatByGroup(chatsList, true);
+                XposedBridge.log("SeparateGroup: GROUPS tab filtered result: " + filtered.size() + " chats");
+                return filtered;
             }
             if (Objects.equals(tabInstances.get(resolvedTabId), convFragment) || Objects.equals(tabInstances.get(CHATS), convFragment)) {
                 XposedBridge.log("SeparateGroup: Filtering for CHATS tab (resolvedTabId=" + resolvedTabId + ")");
-                return filterChatByGroup(chatsList, false);
+                var filtered = filterChatByGroup(chatsList, false);
+                XposedBridge.log("SeparateGroup: CHATS tab filtered result: " + filtered.size() + " chats");
+                return filtered;
             }
             if (statusFallbackMode && tabInstances.containsKey(fallbackGroupTabId) && Objects.equals(tabInstances.get(fallbackGroupTabId), convFragment)) {
                 XposedBridge.log("SeparateGroup: Filtering for fallbackGroupTabId=" + fallbackGroupTabId);
-                return filterChatByGroup(chatsList, true);
+                var filtered = filterChatByGroup(chatsList, true);
+                XposedBridge.log("SeparateGroup: Fallback tab filtered result: " + filtered.size() + " chats");
+                return filtered;
             }
             
             XposedBridge.log("SeparateGroup: filterChat - no matching tabInstance found, returning all chats");
         } catch (Throwable ignored) {
             XposedBridge.log("SeparateGroup: filterChat exception: " + ignored);
+            ignored.printStackTrace();
         }
         return chatsList;
     }
@@ -417,14 +430,28 @@ public class SeparateGroup extends Feature {
             var result = new ArrayList();
             synchronized (SeparateGroup.class) {
                 var db = MessageStore.getInstance().getDatabase();
+                if (db == null) {
+                    XposedBridge.log("SeparateGroup: filterChatByGroup - Database is null, returning all chats");
+                    return chats;
+                }
+                
+                int successCount = 0;
+                int skipCount = 0;
+                
                 for (Object chat : chats) {
                     try {
                         // Get jid from chat object
-                        var jidObj = ReflectionUtils.getObjectField(
-                            ReflectionUtils.getFieldByType(chat.getClass(), "com.whatsapp.jid.Jid"),
-                            chat
-                        );
-                        if (jidObj == null) continue;
+                        var jidField = ReflectionUtils.getFieldByType(chat.getClass(), "com.whatsapp.jid.Jid");
+                        if (jidField == null) {
+                            skipCount++;
+                            continue;
+                        }
+                        
+                        var jidObj = ReflectionUtils.getObjectField(jidField, chat);
+                        if (jidObj == null) {
+                            skipCount++;
+                            continue;
+                        }
 
                         // Get raw string from jid
                         var jidStr = jidObj.toString();
@@ -433,6 +460,7 @@ public class SeparateGroup extends Feature {
                         var cursor = db.rawQuery(sql, new String[]{jidStr});
                         if (!cursor.moveToFirst()) {
                             cursor.close();
+                            skipCount++;
                             continue;
                         }
 
@@ -442,16 +470,21 @@ public class SeparateGroup extends Feature {
 
                         if ((isGroups && isGroup) || (!isGroups && !isGroup)) {
                             result.add(chat);
+                            successCount++;
                         }
                     } catch (Throwable e) {
-                        // Skip this chat on error
+                        XposedBridge.log("SeparateGroup: filterChatByGroup - Error processing chat: " + e);
+                        skipCount++;
                         continue;
                     }
                 }
+                
+                XposedBridge.log("SeparateGroup: filterChatByGroup - Input=" + chats.size() + ", Output=" + result.size() + ", Success=" + successCount + ", Skipped=" + skipCount);
             }
             return result;
         } catch (Throwable throwable) {
-            XposedBridge.log("SeparateGroup: filterChatByGroup error: " + throwable);
+            XposedBridge.log("SeparateGroup: filterChatByGroup fatal error: " + throwable);
+            throwable.printStackTrace();
             return chats;
         }
     }
