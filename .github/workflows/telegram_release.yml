@@ -26,7 +26,7 @@ jobs:
               run: |
                 BODY="${{ github.event.release.body || inputs.release_body }}"
                 URL="${{ github.event.release.html_url || inputs.release_url }}"
-                MESSAGE="$BODY"$'\n\n'"Release: $URL"
+                MESSAGE="$(printf '%s\n\nRelease: %s' "$(printf '%s' "$BODY" | sed '/./,$!d')" "$URL")"
 
                 curl -f -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
                   -d "chat_id=${{ secrets.CHANNEL_ID }}" \

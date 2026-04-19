@@ -107,7 +107,7 @@ jobs:
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64 | tr -dc 'a-zA-Z0-9')
           echo "body<<$EOF" >> $GITHUB_OUTPUT
-          cat changelog.txt >> $GITHUB_OUTPUT
+          sed '/./,$!d' changelog.txt >> $GITHUB_OUTPUT
           echo "" >> $GITHUB_OUTPUT
           echo "$EOF" >> $GITHUB_OUTPUT
 
@@ -117,7 +117,7 @@ jobs:
           CHANGELOG_BODY: ${{ steps.changelog.outputs.body }}
           RELEASE_URL: ${{ steps.release.outputs.url }}
         run: |
-          FULL_MESSAGE="$CHANGELOG_BODY"$'\n\n'"Release: $RELEASE_URL"
+          FULL_MESSAGE="$(printf '%s\n\nRelease: %s' "$CHANGELOG_BODY" "$RELEASE_URL")"
 
           curl -f -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.CHANNEL_ID }}" \
