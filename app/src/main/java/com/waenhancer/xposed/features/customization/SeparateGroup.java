@@ -19,7 +19,6 @@ import com.waenhancer.xposed.utils.ReflectionUtils;
 import com.waenhancer.xposed.utils.Utils;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -37,7 +36,6 @@ public class SeparateGroup extends Feature {
     public static final int CHATS = 200;
     public static final int STATUS = 300;
     public static final int GROUPS = 500;
-
     public static ArrayList<Integer> tabs = new ArrayList<>();
     public static HashMap<Integer, Object> tabInstances = new HashMap<>();
 
@@ -47,23 +45,17 @@ public class SeparateGroup extends Feature {
 
     public void doHook() throws Exception {
         var cFragClass = XposedHelpers.findClass("com.whatsapp.conversationslist.ConversationsFragment", classLoader);
-        var homeActivityClass = WppCore.getHomeActivityClass(classLoader);
 
         if (!prefs.getBoolean("separategroups", false)) return;
+        if (!isSupportedVersion()) {
+            XposedBridge.log("SeparateGroup: WhatsApp update disabled the runtime hooks for Separate Groups; feature temporarily disabled");
+            return;
+        }
 
-        // Modifying tab list order
         hookTabList();
-
-        // Setting group icon
         hookTabIcon();
-
-        // Setting up fragments
         hookTabInstance(cFragClass);
-
-        // Setting group tab name
         hookTabName();
-
-        // Setting tab count
         hookTabCount();
     }
 
@@ -71,6 +63,32 @@ public class SeparateGroup extends Feature {
     @Override
     public String getPluginName() {
         return "Separate Group";
+    }
+
+    private boolean isSupportedVersion() {
+        try {
+            var versionName = Utils.getApplication().getPackageManager()
+                    .getPackageInfo(Utils.getApplication().getPackageName(), 0).versionName;
+            return isVersionAtMost(versionName, 2, 26, 12);
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    private boolean isVersionAtMost(String versionName, int major, int minor, int patch) {
+        if (versionName == null) return true;
+        var parts = versionName.split("\\.");
+        if (parts.length < 3) return true;
+        try {
+            int vMajor = Integer.parseInt(parts[0]);
+            int vMinor = Integer.parseInt(parts[1]);
+            int vPatch = Integer.parseInt(parts[2]);
+            if (vMajor != major) return vMajor < major;
+            if (vMinor != minor) return vMinor < minor;
+            return vPatch <= patch;
+        } catch (NumberFormatException ignored) {
+            return true;
+        }
     }
 
     private void hookTabCount() throws Exception {
@@ -90,7 +108,6 @@ public class SeparateGroup extends Feature {
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 var indexTab = (int) param.args[2];
                 if (indexTab == tabs.indexOf(CHATS)) {
-
                     var chatCount = 0;
                     var groupCount = 0;
                     synchronized (SeparateGroup.class) {
@@ -102,8 +119,7 @@ public class SeparateGroup extends Feature {
                             int groupType = cursor.getInt(cursor.getColumnIndex("group_type"));
                             int archived = cursor.getInt(cursor.getColumnIndex("archived"));
                             int chatLocked = cursor.getInt(cursor.getColumnIndex("chat_lock"));
-                            if (archived != 0 || (groupType != 0 && groupType != 6) || chatLocked != 0)
-                                continue;
+                            if (archived != 0 || (groupType != 0 && groupType != 6) || chatLocked != 0) continue;
                             var sql2 = "SELECT * FROM jid WHERE _id == ?";
                             var cursor1 = db.rawQuery(sql2, new String[]{String.valueOf(jid)});
                             if (!cursor1.moveToFirst()) continue;
@@ -139,30 +155,27 @@ public class SeparateGroup extends Feature {
         logDebug(menuAddAndroidX);
 
         XposedBridge.hookMethod(iconTabMethod, new XC_MethodHook() {
-                    private XC_MethodHook.Unhook hooked;
+            private XC_MethodHook.Unhook hooked;
 
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        hooked = XposedBridge.hookMethod(menuAddAndroidX, new XC_MethodHook() {
-                            @Override
-                            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                                if (param.args.length > 2 && ((int) param.args[1]) == GROUPS) {
-                                    MenuItem menuItem = (MenuItem) param.getResult();
-                                    menuItem.setIcon(Utils.getID("home_tab_communities_selector", "drawable"));
-                                }
-                            }
-                        });
-                    }
-
-                    @SuppressLint("ResourceType")
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                hooked = XposedBridge.hookMethod(menuAddAndroidX, new XC_MethodHook() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        if (hooked != null) {
-                            hooked.unhook();
+                        if (param.args.length > 2 && ((int) param.args[1]) == GROUPS) {
+                            MenuItem menuItem = (MenuItem) param.getResult();
+                            menuItem.setIcon(Utils.getID("home_tab_communities_selector", "drawable"));
                         }
                     }
-                }
-        );
+                });
+            }
+
+            @SuppressLint("ResourceType")
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (hooked != null) hooked.unhook();
+            }
+        });
     }
 
     @SuppressLint("ResourceType")
@@ -187,9 +200,7 @@ public class SeparateGroup extends Feature {
         logDebug(Unobfuscator.getMethodDescriptor(methodTabInstance));
 
         var recreateFragmentMethod = Unobfuscator.loadRecreateFragmentConstructor(classLoader);
-
         var pattern = Pattern.compile("android:switcher:\\d+:(\\d+)");
-
         Class<?> FragmentClass = Unobfuscator.loadFragmentClass(classLoader);
 
         XposedBridge.hookMethod(recreateFragmentMethod, new XC_MethodHook() {
@@ -293,10 +304,8 @@ public class SeparateGroup extends Feature {
         XposedBridge.hookMethod(onCreateTabList, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                var fieldTabsList = loadTabListField(param.thisObject);
-                tabs = getArrayListTab(fieldTabsList);
+                tabs = getArrayListTab(loadTabListField(classLoader));
                 if (tabs == null) return;
-                if (!prefs.getBoolean("separategroups", false)) return;
                 if (!tabs.contains(GROUPS)) {
                     tabs.add(tabs.isEmpty() ? 0 : 1, GROUPS);
                 }
@@ -343,29 +352,37 @@ public class SeparateGroup extends Feature {
             if (jid == null) return true;
             if (XposedHelpers.findMethodExactIfExists(jid.getClass(), "getServer") != null) {
                 var server = (String) callMethod(jid, "getServer");
-                if (isGroup)
+                if (isGroup) {
                     return server.equals("broadcast") || server.equals("g.us");
+                }
                 return server.equals("s.whatsapp.net") || server.equals("lid");
             }
             return true;
         }
     }
 
-    private Field loadTabListField(@NonNull Object root) throws Exception {
-        Class<?> cursor = root instanceof Class<?> cls ? cls : root.getClass();
-        while (cursor != null) {
+    private Field loadTabListField(ClassLoader classLoader) throws Exception {
+        var onCreateTabList = Unobfuscator.loadTabListMethod(classLoader);
+        var owner = onCreateTabList.getDeclaringClass();
+        Field fallback = null;
+        for (var cursor = owner; cursor != null; cursor = cursor.getSuperclass()) {
             for (Field field : cursor.getDeclaredFields()) {
                 if (!List.class.isAssignableFrom(field.getType())) continue;
-                if (!Modifier.isStatic(field.getModifiers())) continue;
+                if (fallback == null) fallback = field;
                 field.setAccessible(true);
                 try {
-                    if (field.get(null) instanceof List) {
+                    var value = field.get(null);
+                    if (!(value instanceof List<?> list)) continue;
+                    if (list.isEmpty() || list.stream().allMatch(item -> item instanceof Number)) {
                         return field;
                     }
                 } catch (Throwable ignored) {
                 }
             }
-            cursor = cursor.getSuperclass();
+        }
+        if (fallback != null) {
+            fallback.setAccessible(true);
+            return fallback;
         }
         throw new Exception("Tab list field not found");
     }
@@ -375,10 +392,9 @@ public class SeparateGroup extends Feature {
         var list = (List<Integer>) listField.get(null);
         if (list instanceof ArrayList<Integer> arrayList) {
             return arrayList;
-        } else {
-            var tabs = new ArrayList<>(list);
-            listField.set(null, tabs);
-            return tabs;
         }
+        var tabs = new ArrayList<>(list);
+        listField.set(null, tabs);
+        return tabs;
     }
 }
