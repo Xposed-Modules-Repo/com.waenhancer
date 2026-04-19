@@ -21,12 +21,9 @@ import com.waenhancer.xposed.utils.ReflectionUtils;
 import com.waenhancer.xposed.utils.Utils;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
-import java.util.ListIterator;
-import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -40,43 +37,70 @@ public class SeparateGroup extends Feature {
 
     public static final int CHATS = 200;
     public static final int STATUS = 300;
-    //    public static final int CALLS = 400;
-//    public static final int COMMUNITY = 600;
     public static final int GROUPS = 500;
+    
     public static ArrayList<Integer> tabs = new ArrayList<>();
     public static HashMap<Integer, Object> tabInstances = new HashMap<>();
+    
+    private volatile int chatTabId = CHATS;
+    private volatile boolean featureEnabled;
+    private volatile boolean loggedTabListSearchShape = false;
+    private volatile boolean statusFallbackMode = false;
+    private volatile int fallbackGroupTabId = STATUS;
 
     public SeparateGroup(ClassLoader loader, XSharedPreferences preferences) {
         super(loader, preferences);
     }
 
     public void doHook() throws Exception {
-
         var cFragClass = XposedHelpers.findClass("com.whatsapp.conversationslist.ConversationsFragment", classLoader);
         var homeActivityClass = WppCore.getHomeActivityClass(classLoader);
 
-        if (!prefs.getBoolean("separategroups", false)) return;
+        // For testing: enable the feature (user requested to test it)
+        boolean shouldEnable = prefs.getBoolean("separategroups", true); // Default to true for testing
+
+        if (!shouldEnable) return;
+
+        featureEnabled = true;
+        statusFallbackMode = false;
+        fallbackGroupTabId = STATUS;
+        
+        XposedBridge.log("SeparateGroup: Feature enabled, starting hooks");
 
         try {
-            // Populate the static tabs list  
+            // Hook the tab list initialization
             hookTabList(homeActivityClass);
+            
+            // Add listener for activity resume to inject groups tab at runtime
+            WppCore.addListenerActivity((activity, state) -> {
+                if (state != WppCore.ActivityChangeState.ChangeType.RESUMED) return;
+                try {
+                    injectGroupsTab(activity, null);
+                } catch (Throwable throwable) {
+                    XposedBridge.log("SeparateGroup: listener inject failed: " + throwable);
+                }
+            });
 
-            // Inject actual tab after UI init
-            hookOnResume(homeActivityClass);
+            // Try immediate injection if activity is available
+            try {
+                var currentActivity = WppCore.getCurrentActivity();
+                if (currentActivity != null) {
+                    injectGroupsTab(currentActivity, null);
+                }
+            } catch (Throwable throwable) {
+                XposedBridge.log("SeparateGroup: immediate inject failed: " + throwable);
+            }
 
-            // Hook TabLayout.addTab() to inject GROUPS tab
-            hookTabLayoutAddTab();
+            // Setting group icon
+            hookTabIcon();
 
-            // Setting group icon - DISABLED for now due to crashes
-            // hookTabIcon();
-
-            // Setting up fragments - DISABLED for now
-            // hookTabInstance(cFragClass);
+            // Setting up fragments
+            hookTabInstance(cFragClass);
 
             // Setting group tab name
             hookTabName();
 
-            // Setting tab count badges
+            // Setting tab count
             hookTabCount();
         } catch (Exception e) {
             XposedBridge.log("SeparateGroup: Error during hook setup: " + e);
@@ -90,44 +114,24 @@ public class SeparateGroup extends Feature {
         return "Separate Group";
     }
 
-    private void hookAdapterGetCount() {
-        try {
-            // The adapter's getCount() method tells ViewPager how many tabs exist
-            // Hook PagerAdapter.getCount() from androidx (wrapped in exception handler)
-            try {
-                var pagerAdapterClass = XposedHelpers.findClass("androidx.viewpager.widget.PagerAdapter", classLoader);
+    private void hookTabList(@NonNull Class<?> home) throws Exception {
+        var onCreateTabList = Unobfuscator.loadTabListMethod(classLoader);
+        logDebug(Unobfuscator.getMethodDescriptor(onCreateTabList));
+
+        XposedBridge.hookMethod(onCreateTabList, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (!featureEnabled) return;
                 try {
-                    var getCountMethod = XposedHelpers.findMethodExact(pagerAdapterClass, "getCount");
-                    
-                    XposedBridge.hookMethod(getCountMethod, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                            try {
-                                if (!prefs.getBoolean("separategroups", false)) return;
-                                int count = (Integer) param.getResult();
-                                if (count == 4 && tabs.size() == 5) {
-                                    param.setResult(5);
-                                    XposedBridge.log("SeparateGroup: PagerAdapter.getCount() returning 5 instead of 4");
-                                }
-                            } catch (Exception e) {
-                                // Ignore errors in hook execution
-                            }
-                        }
-                    });
-                    XposedBridge.log("SeparateGroup: Hooked androidx.viewpager.widget.PagerAdapter.getCount");
-                } catch (Exception e) {
-                    XposedBridge.log("SeparateGroup: Could not find/hook getCount method: " + e.getMessage());
+                    injectGroupsTab(param.thisObject, null);
+                } catch (Throwable throwable) {
+                    XposedBridge.log("SeparateGroup: hookTabList inject failed: " + throwable);
                 }
-            } catch (Exception e) {
-                XposedBridge.log("SeparateGroup: PagerAdapter class not available");
             }
-        } catch (Exception e) {
-            XposedBridge.log("SeparateGroup: Exception in hookAdapterGetCount: " + e.getMessage());
-        }
+        });
     }
 
     private void hookTabCount() throws Exception {
-
         var runMethod = Unobfuscator.loadTabCountMethod(classLoader);
         logDebug(Unobfuscator.getMethodDescriptor(runMethod));
 
@@ -143,7 +147,8 @@ public class SeparateGroup extends Feature {
             @SuppressLint({"Range", "Recycle"})
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 var indexTab = (int) param.args[2];
-                if (indexTab == tabs.indexOf(CHATS)) {
+                var resolvedChatTabId = resolveChatTabId();
+                if (indexTab == tabs.indexOf(resolvedChatTabId)) {
 
                     var chatCount = 0;
                     var groupCount = 0;
@@ -171,7 +176,7 @@ public class SeparateGroup extends Feature {
                         }
                         cursor.close();
                     }
-                    if (tabs.contains(CHATS) && tabInstances.containsKey(CHATS)) {
+                    if (tabs.contains(resolvedChatTabId) && tabInstances.containsKey(resolvedChatTabId)) {
                         var instance12 = chatCount <= 0 ? constructor3.newInstance() : constructor2.newInstance(chatCount);
                         var instance22 = constructor1.newInstance(instance12);
                         param.args[1] = instance22;
@@ -193,22 +198,22 @@ public class SeparateGroup extends Feature {
         logDebug(menuAddAndroidX);
 
         XposedBridge.hookMethod(iconTabMethod, new XC_MethodHook() {
-
-                    private Unhook hooked;
+                    private XC_MethodHook.Unhook hooked;
 
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        try {
+                            var activity = WppCore.getCurrentActivity();
+                            injectGroupsTab(activity != null ? activity : param.thisObject, null);
+                        } catch (Throwable throwable) {
+                            XposedBridge.log("SeparateGroup: icon hook inject failed: " + throwable);
+                        }
                         hooked = XposedBridge.hookMethod(menuAddAndroidX, new XC_MethodHook() {
                             @Override
                             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                                if (param.args.length > 2) {
-                                    int itemId = (int) param.args[1];
-                                    if (tabs != null && !tabs.isEmpty() && itemId < tabs.size() && tabs.get(itemId) == GROUPS) {
-                                        MenuItem menuItem = (MenuItem) param.getResult();
-                                        if (menuItem != null) {
-                                            menuItem.setIcon(Utils.getID("home_tab_communities_selector", "drawable"));
-                                        }
-                                    }
+                                if (param.args.length > 2 && ((int) param.args[1]) == GROUPS) {
+                                    MenuItem menuItem = (MenuItem) param.getResult();
+                                    menuItem.setIcon(Utils.getID("home_tab_communities_selector", "drawable"));
                                 }
                             }
                         });
@@ -232,12 +237,14 @@ public class SeparateGroup extends Feature {
         XposedBridge.hookMethod(tabNameMethod, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                var tabIndex = (int) param.args[0];
-                if (tabs == null || tabs.isEmpty() || tabIndex >= tabs.size()) {
-                    return;
+                try {
+                    var activity = WppCore.getCurrentActivity();
+                    injectGroupsTab(activity != null ? activity : param.thisObject, null);
+                } catch (Throwable throwable) {
+                    XposedBridge.log("SeparateGroup: tab name hook inject failed: " + throwable);
                 }
-                var tabId = tabs.get(tabIndex);
-                if (tabId == GROUPS) {
+                var tab = (int) param.args[0];
+                if (isGroupsTabId(tab)) {
                     param.setResult(UnobfuscatorCache.getInstance().getString("groups"));
                 }
             }
@@ -271,7 +278,7 @@ public class SeparateGroup extends Feature {
                 var matcher = pattern.matcher(string);
                 if (matcher.find()) {
                     var tabId = Integer.parseInt(matcher.group(1));
-                    if (tabId == GROUPS || tabId == CHATS) {
+                    if (isGroupsTabId(tabId) || tabId == resolveChatTabId()) {
                         var fragmentField = ReflectionUtils.getFieldByType(param.thisObject.getClass(), FragmentClass);
                         var convFragment = ReflectionUtils.getObjectField(fragmentField, param.thisObject);
                         tabInstances.remove(tabId);
@@ -285,8 +292,10 @@ public class SeparateGroup extends Feature {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 if (tabs == null || tabs.isEmpty()) return;
-                var tabId = tabs.get((int) param.args[0]).intValue();
-                if (tabId == GROUPS || tabId == CHATS) {
+                var index = (int) param.args[0];
+                if (index < 0 || index >= tabs.size()) return;
+                var tabId = tabs.get(index).intValue();
+                if (isGroupsTabId(tabId) || tabId == resolveChatTabId()) {
                     var convFragment = cFrag.newInstance();
                     param.setResult(convFragment);
                 }
@@ -295,7 +304,9 @@ public class SeparateGroup extends Feature {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 if (tabs == null || tabs.isEmpty()) return;
-                var tabId = tabs.get((int) param.args[0]).intValue();
+                var index = (int) param.args[0];
+                if (index < 0 || index >= tabs.size()) return;
+                var tabId = tabs.get(index).intValue();
                 tabInstances.remove(tabId);
                 tabInstances.put(tabId, param.getResult());
             }
@@ -307,6 +318,19 @@ public class SeparateGroup extends Feature {
                 var chatsList = (List) param.getResult();
                 var resultList = filterChat(param.thisObject, chatsList);
                 param.setResult(resultList);
+
+                // Inject again when the fragment list is already alive
+                try {
+                    Object activityTarget = WppCore.getCurrentActivity();
+                    if (activityTarget == null) {
+                        activityTarget = XposedHelpers.callMethod(param.thisObject, "getActivity");
+                    }
+                    if (activityTarget != null) {
+                        injectGroupsTab(activityTarget, null);
+                    }
+                } catch (Throwable throwable) {
+                    XposedBridge.log("SeparateGroup: methodTabInstance inject failed: " + throwable);
+                }
             }
         });
 
@@ -316,7 +340,9 @@ public class SeparateGroup extends Feature {
         XposedBridge.hookMethod(fabintMethod, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                if (Objects.equals(tabInstances.get(GROUPS), param.thisObject)) {
+                if (Objects.equals(tabInstances.get(GROUPS), param.thisObject)
+                        || (statusFallbackMode && Objects.equals(tabInstances.get(fallbackGroupTabId), param.thisObject))
+                        || Objects.equals(tabInstances.get(STATUS), param.thisObject)) {
                     param.setResult(GROUPS);
                 }
             }
@@ -338,279 +364,360 @@ public class SeparateGroup extends Feature {
                 var resultList = filterChat(thiz, chatsList);
                 XposedHelpers.setObjectField(filters, "values", resultList);
                 XposedHelpers.setIntField(filters, "count", resultList.size());
+
+                try {
+                    Object activityTarget = WppCore.getCurrentActivity();
+                    if (activityTarget == null) {
+                        activityTarget = XposedHelpers.callMethod(thiz, "getActivity");
+                    }
+                    if (activityTarget != null) {
+                        injectGroupsTab(activityTarget, null);
+                    }
+                } catch (Throwable throwable) {
+                    XposedBridge.log("SeparateGroup: publishResults inject failed: " + throwable);
+                }
             }
         });
     }
 
-    private List filterChat(Object thiz, List chatsList) {
-        var tabChat = tabInstances.get(CHATS);
-        var tabGroup = tabInstances.get(GROUPS);
-        if (!Objects.equals(tabChat, thiz) && !Objects.equals(tabGroup, thiz)) {
-            return chatsList;
+    private List filterChat(Object convFragment, List chatsList) {
+        try {
+            var resolvedTabId = resolveChatTabId();
+            if (convFragment instanceof java.util.LinkedHashSet || tabInstances.isEmpty()) return chatsList;
+
+            if (tabInstances.containsKey(GROUPS) && Objects.equals(tabInstances.get(GROUPS), convFragment)) {
+                return filterChatByGroup(chatsList, true);
+            }
+            if (Objects.equals(tabInstances.get(resolvedTabId), convFragment) || Objects.equals(tabInstances.get(CHATS), convFragment)) {
+                return filterChatByGroup(chatsList, false);
+            }
+            if (statusFallbackMode && tabInstances.containsKey(fallbackGroupTabId) && Objects.equals(tabInstances.get(fallbackGroupTabId), convFragment)) {
+                return filterChatByGroup(chatsList, true);
+            }
+        } catch (Throwable ignored) {
         }
-        var editableChatList = new ArrayListFilter(Objects.equals(tabGroup, thiz));
-        editableChatList.addAll(chatsList);
-        return editableChatList;
+        return chatsList;
     }
 
-    private void hookOnResume(@NonNull Class<?> home) throws Exception {
-        // Hook onCreate to set up initial state
+    private List filterChatByGroup(List chats, boolean isGroups) {
         try {
-            var onCreateMethod = XposedHelpers.findMethodExact(home, "onCreate", android.os.Bundle.class);
-            XposedBridge.hookMethod(onCreateMethod, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    XposedBridge.log("SeparateGroup: onCreate complete");
+            var result = new ArrayList();
+            synchronized (SeparateGroup.class) {
+                var db = MessageStore.getInstance().getDatabase();
+                for (Object chat : chats) {
+                    try {
+                        // Get jid from chat object
+                        var jidObj = ReflectionUtils.getObjectField(
+                            ReflectionUtils.getFieldByType(chat.getClass(), "com.whatsapp.jid.Jid"),
+                            chat
+                        );
+                        if (jidObj == null) continue;
+
+                        // Get raw string from jid
+                        var jidStr = jidObj.toString();
+                        
+                        var sql = "SELECT * FROM jid WHERE raw_string = ?";
+                        var cursor = db.rawQuery(sql, new String[]{jidStr});
+                        if (!cursor.moveToFirst()) {
+                            cursor.close();
+                            continue;
+                        }
+
+                        var server = cursor.getString(cursor.getColumnIndex("server"));
+                        var isGroup = server.equals("g.us");
+                        cursor.close();
+
+                        if ((isGroups && isGroup) || (!isGroups && !isGroup)) {
+                            result.add(chat);
+                        }
+                    } catch (Throwable e) {
+                        // Skip this chat on error
+                        continue;
+                    }
                 }
-            });
-        } catch (Exception e) {
-            XposedBridge.log("SeparateGroup: Could not hook onCreate: " + e.getMessage());
+            }
+            return result;
+        } catch (Throwable throwable) {
+            XposedBridge.log("SeparateGroup: filterChatByGroup error: " + throwable);
+            return chats;
         }
     }
 
-    private void hookTabLayoutAddTab() {
+    private void injectGroupsTab(@NonNull Object homeInstance, java.lang.reflect.Field preferredField) {
+        if (!featureEnabled) return;
+
+        Object listOwner = homeInstance;
+        java.lang.reflect.Field listField = preferredField;
+        if (listField == null) {
+            var listRef = findTabListRef(homeInstance);
+            if (listRef != null) {
+                listOwner = listRef.owner;
+                listField = listRef.field;
+            }
+        }
+
+        if (listField == null || listOwner == null) {
+            if (!loggedTabListSearchShape) {
+                loggedTabListSearchShape = true;
+                XposedBridge.log("SeparateGroup: Tab-list search failed for class " + homeInstance.getClass().getName());
+            }
+            return;
+        }
+
         try {
-            // Since TabLayout is obfuscated in this WhatsApp version,
-            // we cannot directly hook TabLayout.addTab().
-            // Instead, we modify the tabs list in hookTabList() before TabLayout uses it.
-            XposedBridge.log("SeparateGroup: TabLayout is obfuscated, using list modification approach");
-        } catch (Exception e) {
-            XposedBridge.log("SeparateGroup: Error in hookTabLayoutAddTab: " + e.getMessage());
+            var listObj = listField.get(listOwner);
+            if (!(listObj instanceof List<?> rawList)) {
+                XposedBridge.log("SeparateGroup: Tab list field is null or not a List");
+                return;
+            }
+
+            boolean allNumeric = true;
+            for (Object item : rawList) {
+                if (!(item instanceof Integer) && !(item instanceof Number)) {
+                    allNumeric = false;
+                    break;
+                }
+            }
+            if (!rawList.isEmpty() && !allNumeric) {
+                XposedBridge.log("SeparateGroup: Skipping field injection (object-backed tabs)");
+                enableStatusFallback(rawList, "field object-backed list");
+                return;
+            }
+
+            ArrayList<Integer> mutableTabs = new ArrayList<>();
+            for (Object item : rawList) {
+                Integer parsed = extractTabId(item);
+                if (parsed != null) {
+                    mutableTabs.add(parsed);
+                }
+            }
+
+            tabs = mutableTabs;
+            statusFallbackMode = false;
+            var resolvedChatTabId = resolveChatTabId();
+            XposedBridge.log("SeparateGroup: Current tabs before: " + tabs + " (field=" + listField.getName() + ", chatTabId=" + resolvedChatTabId + ")");
+
+            if (!tabs.isEmpty() && tabs.contains(resolvedChatTabId) && !tabs.contains(GROUPS)) {
+                tabs.add(tabs.indexOf(resolvedChatTabId) + 1, GROUPS);
+                XposedBridge.log("SeparateGroup: Injected GROUPS tab. Current tabs: " + tabs);
+            } else if (!tabs.isEmpty() && !tabs.contains(GROUPS)) {
+                tabs.add(1 <= tabs.size() ? 1 : 0, GROUPS);
+                XposedBridge.log("SeparateGroup: Injected GROUPS tab using fallback position. Current tabs: " + tabs);
+            } else if (tabs.isEmpty()) {
+                XposedBridge.log("SeparateGroup: Skipping injection (list is empty)");
+            } else if (!tabs.contains(resolvedChatTabId)) {
+                XposedBridge.log("SeparateGroup: Skipping injection (resolved chat tab not found). Current tabs: " + tabs);
+            } else {
+                XposedBridge.log("SeparateGroup: Skipping injection (GROUPS tab already present). Current tabs: " + tabs);
+            }
+        } catch (Throwable throwable) {
+            XposedBridge.log("SeparateGroup: Injection failed: " + throwable);
         }
     }
 
-    private void hookTabList(@NonNull Class<?> home) throws Exception {
-        var onCreateTabList = Unobfuscator.loadTabListMethod(classLoader);
-        logDebug(Unobfuscator.getMethodDescriptor(onCreateTabList));
-        var fieldTabsList = ReflectionUtils.getFieldByExtendType(home, List.class);
-        if (fieldTabsList == null) {
-            throw new NullPointerException("fieldTabList is NULL!");
+    private void enableStatusFallback(List rawList, String reason) {
+        statusFallbackMode = true;
+        fallbackGroupTabId = STATUS;
+        XposedBridge.log("SeparateGroup: Enabling status fallback mode due to: " + reason);
+        
+        ArrayList<Object> mutableTabs = new ArrayList<>(rawList);
+        if (!mutableTabs.contains(GROUPS)) {
+            mutableTabs.add(1, GROUPS);
         }
         
-        XposedBridge.hookMethod(onCreateTabList, new XC_MethodHook() {
-            @Override
-            @SuppressWarnings("unchecked")
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                XposedBridge.log("SeparateGroup: [hookTabList] beforeHookedMethod called");
-                try {
-                    if (!prefs.getBoolean("separategroups", false)) {
-                        XposedBridge.log("SeparateGroup: [hookTabList] separategroups pref is false");
-                        return;
+        // Only update if we can extract at least one numeric ID
+        for (Object item : mutableTabs) {
+            if (extractTabId(item) != null) {
+                tabs = new ArrayList<>();
+                for (Object obj : mutableTabs) {
+                    Integer id = extractTabId(obj);
+                    if (id != null) {
+                        tabs.add(id);
                     }
-                    
-                    // At this point, onCreate hasn't finished yet, so the list might not be set
-                    // We'll handle this in the afterHookedMethod instead
-                    XposedBridge.log("SeparateGroup: [hookTabList] beforeHookedMethod - will wait for afterHookedMethod");
-                } catch (Exception e) {
-                    XposedBridge.log("SeparateGroup: Exception in hookTabList beforeHookedMethod: " + e.getMessage());
+                }
+                break;
+            }
+        }
+    }
+
+    private int resolveChatTabId() {
+        if (tabs == null || tabs.isEmpty()) {
+            return chatTabId;
+        }
+        if (tabs.contains(chatTabId)) {
+            return chatTabId;
+        }
+        if (tabs.contains(CHATS)) {
+            chatTabId = CHATS;
+            return chatTabId;
+        }
+        for (Integer id : tabs) {
+            if (id != null && id != GROUPS && id != STATUS) {
+                chatTabId = id;
+                return chatTabId;
+            }
+        }
+        chatTabId = tabs.get(0);
+        return chatTabId;
+    }
+
+    private TabListRef findTabListRef(@NonNull Object root) {
+        TabListRef best = findTabListRefOnObject(root, false);
+        long bestRank = rankTabListRef(best);
+
+        TabListRef emptyFallback = null;
+        Class<?> cursor = root.getClass();
+        while (cursor != null && cursor != Object.class) {
+            for (var field : cursor.getDeclaredFields()) {
+                field.setAccessible(true);
+                try {
+                    var nested = field.get(root);
+                    if (nested == null) continue;
+                    if (nested == root) continue;
+                    var nestedRef = findTabListRefOnObject(nested, false);
+                    long nestedRank = rankTabListRef(nestedRef);
+                    if (nestedRank > bestRank) {
+                        best = nestedRef;
+                        bestRank = nestedRank;
+                    }
+                    if (emptyFallback == null) {
+                        emptyFallback = findTabListRefOnObject(nested, true);
+                    }
+                } catch (Throwable ignored) {
                 }
             }
-            
-            @Override
-            @SuppressWarnings("unchecked")
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                XposedBridge.log("SeparateGroup: [hookTabList] afterHookedMethod called");
+            cursor = cursor.getSuperclass();
+        }
+
+        if (best != null) {
+            return best;
+        }
+        return emptyFallback;
+    }
+
+    private TabListRef findTabListRefOnObject(@NonNull Object owner, boolean allowEmptyFallback) {
+        Class<?> cursor = owner.getClass();
+        TabListRef bestNumericRef = null;
+        int bestNumericCount = -1;
+        TabListRef bestNonEmptyRef = null;
+        int bestNonEmptySize = -1;
+        TabListRef emptyFallback = null;
+        
+        while (cursor != null && cursor != Object.class) {
+            for (var field : cursor.getDeclaredFields()) {
+                if (!List.class.isAssignableFrom(field.getType())) continue;
+                field.setAccessible(true);
                 try {
-                    if (!prefs.getBoolean("separategroups", false)) {
-                        XposedBridge.log("SeparateGroup: [hookTabList] separategroups pref is false in afterHook");
-                        return;
-                    }
-                    
-                    var listObj = fieldTabsList.get(param.thisObject);
-                    XposedBridge.log("SeparateGroup: [hookTabList] listObj type: " + (listObj == null ? "null" : listObj.getClass().getName()));
-                    
-                    if (!(listObj instanceof List<?> rawList)) {
-                        XposedBridge.log("SeparateGroup: [hookTabList] listObj is not a List");
-                        return;
+                    var value = field.get(owner);
+                    if (!(value instanceof List<?> raw)) continue;
+                    if (raw.isEmpty()) {
+                        if (emptyFallback == null) {
+                            emptyFallback = new TabListRef(owner, field);
+                        }
+                        continue;
                     }
 
-                    ArrayList<Integer> currentTabs = new ArrayList<>();
-                    for (Object item : rawList) {
-                        if (item instanceof Integer tabId) {
-                            currentTabs.add(tabId);
+                    int numericCount = 0;
+                    for (Object item : raw) {
+                        if (extractTabId(item) != null) {
+                            numericCount++;
                         }
                     }
-                    
-                    XposedBridge.log("SeparateGroup: [hookTabList] Current tabs in list: " + currentTabs);
 
-                    // If GROUPS not already present, try to add it to the list
-                    if (!currentTabs.isEmpty() && currentTabs.contains(CHATS) && !currentTabs.contains(GROUPS)) {
-                        try {
-                            // Try to modify the actual list directly
-                            // BUT wrap in exception handler since TabLayout might not allow this
-                            int chatsIndex = rawList.indexOf(CHATS);
-                            if (chatsIndex >= 0) {
-                                XposedBridge.log("SeparateGroup: [hookTabList] CHATS index: " + chatsIndex + ", attempting to insert GROUPS");
-                                try {
-                                    @SuppressWarnings("unchecked")
-                                    List<Integer> intList = (List<Integer>) rawList;
-                                    intList.add(chatsIndex + 1, GROUPS);
-                                    tabs = new ArrayList<>(intList);
-                                    XposedBridge.log("SeparateGroup: [hookTabList] Successfully injected GROUPS into list: " + tabs);
-                                } catch (UnsupportedOperationException | ClassCastException listOpError) {
-                                    XposedBridge.log("SeparateGroup: [hookTabList] Cannot modify list directly (likely immutable): " + listOpError.getMessage());
-                                    // Fall back to static list approach
-                                    tabs = new ArrayList<>(currentTabs);
-                                    tabs.add(tabs.indexOf(CHATS) + 1, GROUPS);
-                                    XposedBridge.log("SeparateGroup: [hookTabList] Using static tabs list: " + tabs);
-                                }
-                            }
-                        } catch (Exception listModError) {
-                            XposedBridge.log("SeparateGroup: [hookTabList] Error during list modification: " + listModError.getMessage());
-                            listModError.printStackTrace();
-                            tabs = new ArrayList<>(currentTabs);
-                            tabs.add(tabs.indexOf(CHATS) + 1, GROUPS);
-                        }
-                    } else {
-                        tabs = new ArrayList<>(currentTabs);
-                        XposedBridge.log("SeparateGroup: [hookTabList] No modification needed, tabs: " + tabs);
+                    if (numericCount > bestNumericCount) {
+                        bestNumericCount = numericCount;
+                        bestNumericRef = new TabListRef(owner, field);
                     }
-                } catch (Exception e) {
-                    XposedBridge.log("SeparateGroup: Exception in hookTabList afterHookedMethod: " + e.getMessage());
-                    e.printStackTrace();
+                    if (raw.size() > bestNonEmptySize) {
+                        bestNonEmptySize = raw.size();
+                        bestNonEmptyRef = new TabListRef(owner, field);
+                    }
+                } catch (Throwable ignored) {
                 }
             }
-        });
+            cursor = cursor.getSuperclass();
+        }
+
+        if (bestNumericRef != null && bestNumericCount >= 2) {
+            return bestNumericRef;
+        }
+        if (bestNonEmptyRef != null) {
+            return bestNonEmptyRef;
+        }
+        return allowEmptyFallback ? emptyFallback : null;
     }
 
-    /**
-     * Wrapper ArrayList that transparently adds GROUPS tab to the list
-     * without modifying the underlying list
-     */
-    public class TabsListWrapper extends ArrayList<Integer> {
-        private final ArrayList<?> originalList;
-        private final ArrayList<Integer> tabs;
-        private final int groupsIndex;
-
-        @SuppressWarnings("unchecked")
-        public TabsListWrapper(ArrayList<?> original, ArrayList<Integer> currentTabs) {
-            this.originalList = original;
-            this.tabs = new ArrayList<>(currentTabs);
+    private long rankTabListRef(TabListRef ref) {
+        if (ref == null) return 0;
+        try {
+            var value = ref.field.get(ref.owner);
+            if (!(value instanceof List<?> list)) return 0;
+            if (list.isEmpty()) return 1;
             
-            // Insert GROUPS at position after CHATS
-            if (!this.tabs.isEmpty() && this.tabs.contains(CHATS) && !this.tabs.contains(GROUPS)) {
-                this.groupsIndex = this.tabs.indexOf(CHATS) + 1;
-                this.tabs.add(this.groupsIndex, GROUPS);
-                XposedBridge.log("SeparateGroup: TabsListWrapper created with GROUPS at index " + this.groupsIndex);
-            } else {
-                this.groupsIndex = -1;
-                XposedBridge.log("SeparateGroup: TabsListWrapper created without GROUPS injection");
-            }
-        }
-
-        @Override
-        public int size() {
-            return tabs.size();
-        }
-
-        @Override
-        public Integer get(int index) {
-            return tabs.get(index);
-        }
-
-        @Override
-        public Iterator<Integer> iterator() {
-            return tabs.iterator();
-        }
-
-        @Override
-        public ListIterator<Integer> listIterator() {
-            return tabs.listIterator();
-        }
-
-        @Override
-        public ListIterator<Integer> listIterator(int index) {
-            return tabs.listIterator(index);
-        }
-
-        @Override
-        public List<Integer> subList(int fromIndex, int toIndex) {
-            return tabs.subList(fromIndex, toIndex);
-        }
-
-        @Override
-        public boolean contains(Object o) {
-            return tabs.contains(o);
-        }
-
-        @Override
-        public int indexOf(Object o) {
-            return tabs.indexOf(o);
-        }
-
-        @Override
-        public int lastIndexOf(Object o) {
-            return tabs.lastIndexOf(o);
-        }
-
-        @Override
-        public boolean isEmpty() {
-            return tabs.isEmpty();
-        }
-
-        @Override
-        public Object[] toArray() {
-            return tabs.toArray();
-        }
-
-        @Override
-        public <T> T[] toArray(T[] a) {
-            return tabs.toArray(a);
-        }
-
-        @Override
-        public String toString() {
-            return tabs.toString();
-        }
-    }
-
-
-    public static class ArrayListFilter extends ArrayList<Object> {
-
-        private final boolean isGroup;
-
-        public ArrayListFilter(boolean isGroup) {
-            this.isGroup = isGroup;
-        }
-
-
-        @Override
-        public void add(int index, Object element) {
-            if (checkGroup(element)) {
-                super.add(index, element);
-            }
-        }
-
-        @Override
-        public boolean add(Object object) {
-            if (checkGroup(object)) {
-                return super.add(object);
-            }
-            return true;
-        }
-
-        @Override
-        public boolean addAll(@NonNull Collection c) {
-            for (var chat : c) {
-                if (checkGroup(chat)) {
-                    super.add(chat);
+            long score = list.size() * 100;
+            int numericCount = 0;
+            for (Object item : list) {
+                if (extractTabId(item) != null) {
+                    numericCount++;
                 }
             }
-            return true;
+            score += numericCount * 1000;
+            return score;
+        } catch (Throwable ignored) {
         }
-
-        private boolean checkGroup(Object chat) {
-            var jid = getObjectField(chat, "A00");
-            if (jid == null) jid = getObjectField(chat, "A01");
-            if (jid == null) return true;
-            if (XposedHelpers.findMethodExactIfExists(jid.getClass(), "getServer") != null) {
-                var server = (String) callMethod(jid, "getServer");
-                if (isGroup)
-                    return server.equals("broadcast") || server.equals("g.us");
-                return server.equals("s.whatsapp.net") || server.equals("lid");
-            }
-            return true;
-        }
+        return 0;
     }
 
+    private Integer extractTabId(Object item) {
+        if (item == null) return null;
+        if (item instanceof Integer tabId) return tabId;
+        if (item instanceof Number number) return number.intValue();
+
+        try {
+            var intMethod = XposedHelpers.findMethodExactIfExists(item.getClass(), "intValue");
+            if (intMethod != null) {
+                Object value = intMethod.invoke(item);
+                if (value instanceof Number number) return number.intValue();
+            }
+        } catch (Throwable ignored) {
+        }
+
+        Class<?> cursor = item.getClass();
+        while (cursor != null && cursor != Object.class) {
+            for (var field : cursor.getDeclaredFields()) {
+                try {
+                    field.setAccessible(true);
+                    Class<?> type = field.getType();
+                    if (type == int.class) {
+                        int v = field.getInt(item);
+                        if (v > 0 && v < 5000) return v;
+                    } else if (Number.class.isAssignableFrom(type)) {
+                        Object value = field.get(item);
+                        if (value instanceof Number number) {
+                            int v = number.intValue();
+                            if (v > 0 && v < 5000) return v;
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            cursor = cursor.getSuperclass();
+        }
+
+        return null;
+    }
+
+    private boolean isGroupsTabId(int tabId) {
+        return tabId == GROUPS || tabId == 500;
+    }
+
+    private static final class TabListRef {
+        final Object owner;
+        final java.lang.reflect.Field field;
+
+        TabListRef(Object owner, java.lang.reflect.Field field) {
+            this.owner = owner;
+            this.field = field;
+        }
+    }
 }
