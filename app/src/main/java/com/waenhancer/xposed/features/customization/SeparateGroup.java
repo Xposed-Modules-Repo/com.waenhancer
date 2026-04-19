@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.ListIterator;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -54,20 +56,25 @@ public class SeparateGroup extends Feature {
 
         if (!prefs.getBoolean("separategroups", false)) return;
 
-        // Modifying tab list order
-        hookTabList(homeActivityClass);
+        try {
+            // Populate the static tabs list (don't modify the actual field)
+            hookTabList(homeActivityClass);
 
-        // Setting group icon
-        hookTabIcon();
+            // Setting group icon - DISABLED for now due to crashes
+            // hookTabIcon();
 
-        // Setting up fragments
-        hookTabInstance(cFragClass);
+            // Setting up fragments - DISABLED for now
+            // hookTabInstance(cFragClass);
 
-        // Setting group tab name
-        hookTabName();
+            // Setting group tab name
+            hookTabName();
 
-        // Setting tab count
-        hookTabCount();
+            // Setting tab count
+            hookTabCount();
+        } catch (Exception e) {
+            XposedBridge.log("SeparateGroup: Error during hook setup: " + e);
+            e.printStackTrace();
+        }
     }
 
     @NonNull
@@ -151,9 +158,14 @@ public class SeparateGroup extends Feature {
                         hooked = XposedBridge.hookMethod(menuAddAndroidX, new XC_MethodHook() {
                             @Override
                             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                                if (param.args.length > 2 && ((int) param.args[1]) == GROUPS) {
-                                    MenuItem menuItem = (MenuItem) param.getResult();
-                                    menuItem.setIcon(Utils.getID("home_tab_communities_selector", "drawable"));
+                                if (param.args.length > 2) {
+                                    int itemId = (int) param.args[1];
+                                    if (tabs != null && !tabs.isEmpty() && itemId < tabs.size() && tabs.get(itemId) == GROUPS) {
+                                        MenuItem menuItem = (MenuItem) param.getResult();
+                                        if (menuItem != null) {
+                                            menuItem.setIcon(Utils.getID("home_tab_communities_selector", "drawable"));
+                                        }
+                                    }
                                 }
                             }
                         });
@@ -305,52 +317,134 @@ public class SeparateGroup extends Feature {
         if (fieldTabsList == null) {
             throw new NullPointerException("fieldTabList is NULL!");
         }
+        
         XposedBridge.hookMethod(onCreateTabList, new XC_MethodHook() {
             @Override
             @SuppressWarnings("unchecked")
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                var listObj = fieldTabsList.get(param.thisObject);
-                if (!(listObj instanceof List<?> rawList)) {
-                    XposedBridge.log("SeparateGroup: Tab list field is null or not a List");
-                    return;
-                }
-
-                ArrayList<Integer> mutableTabs;
-                if (listObj instanceof ArrayList) {
-                    mutableTabs = (ArrayList<Integer>) listObj;
-                } else {
-                    mutableTabs = new ArrayList<>();
-                    for (Object item : rawList) {
-                        if (item instanceof Integer tabId) {
-                            mutableTabs.add(tabId);
-                        }
-                    }
-                    try {
-                        fieldTabsList.set(param.thisObject, mutableTabs);
-                    } catch (Throwable throwable) {
-                        XposedBridge.log("SeparateGroup: Failed to replace tab list field: " + throwable);
+                try {
+                    var listObj = fieldTabsList.get(param.thisObject);
+                    if (!(listObj instanceof List<?> rawList)) {
+                        XposedBridge.log("SeparateGroup: Tab list field is null or not a List");
                         return;
                     }
-                }
 
-                tabs = mutableTabs;
-                XposedBridge.log("SeparateGroup: Current tabs before: " + tabs + " (" + mutableTabs.getClass().getName() + ")");
-                if (!prefs.getBoolean("separategroups", false)) return;
+                    ArrayList<Integer> originalTabs = new ArrayList<>();
+                    for (Object item : rawList) {
+                        if (item instanceof Integer tabId) {
+                            originalTabs.add(tabId);
+                        }
+                    }
 
-                // CRITICAL: Only inject if the list is valid and contains the main CHATS tab.
-                // If it's empty, we might have hooked the wrong field or are too early (causing a crash).
-                if (!tabs.isEmpty() && tabs.contains(CHATS) && !tabs.contains(GROUPS)) {
-                    tabs.add(tabs.indexOf(CHATS) + 1, GROUPS);
-                    XposedBridge.log("SeparateGroup: Injected GROUPS tab. Current tabs: " + tabs);
-                } else if (tabs.isEmpty()) {
-                    XposedBridge.log("SeparateGroup: Skipping injection (list is empty)");
-                } else if (!tabs.contains(CHATS)) {
-                    XposedBridge.log("SeparateGroup: Skipping injection (CHATS tab not found). Current tabs: " + tabs);
-                } else {
-                    XposedBridge.log("SeparateGroup: Skipping injection (GROUPS tab already present). Current tabs: " + tabs);
+                    XposedBridge.log("SeparateGroup: Original tabs: " + originalTabs);
+                    
+                    // Populate the static tabs list with GROUPS injected
+                    if (!originalTabs.isEmpty() && originalTabs.contains(CHATS) && !originalTabs.contains(GROUPS)) {
+                        tabs = new ArrayList<>(originalTabs);
+                        int insertPos = tabs.indexOf(CHATS) + 1;
+                        tabs.add(insertPos, GROUPS);
+                        XposedBridge.log("SeparateGroup: Static tabs populated with GROUPS: " + tabs);
+                    } else {
+                        tabs = new ArrayList<>(originalTabs);
+                        XposedBridge.log("SeparateGroup: Static tabs (no GROUPS): " + tabs);
+                    }
+                } catch (Exception e) {
+                    XposedBridge.log("SeparateGroup: Exception in hookTabList: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
         });
+    }
+
+    /**
+     * Wrapper ArrayList that transparently adds GROUPS tab to the list
+     * without modifying the underlying list
+     */
+    public class TabsListWrapper extends ArrayList<Integer> {
+        private final ArrayList<?> originalList;
+        private final ArrayList<Integer> tabs;
+        private final int groupsIndex;
+
+        @SuppressWarnings("unchecked")
+        public TabsListWrapper(ArrayList<?> original, ArrayList<Integer> currentTabs) {
+            this.originalList = original;
+            this.tabs = new ArrayList<>(currentTabs);
+            
+            // Insert GROUPS at position after CHATS
+            if (!this.tabs.isEmpty() && this.tabs.contains(CHATS) && !this.tabs.contains(GROUPS)) {
+                this.groupsIndex = this.tabs.indexOf(CHATS) + 1;
+                this.tabs.add(this.groupsIndex, GROUPS);
+                XposedBridge.log("SeparateGroup: TabsListWrapper created with GROUPS at index " + this.groupsIndex);
+            } else {
+                this.groupsIndex = -1;
+                XposedBridge.log("SeparateGroup: TabsListWrapper created without GROUPS injection");
+            }
+        }
+
+        @Override
+        public int size() {
+            return tabs.size();
+        }
+
+        @Override
+        public Integer get(int index) {
+            return tabs.get(index);
+        }
+
+        @Override
+        public Iterator<Integer> iterator() {
+            return tabs.iterator();
+        }
+
+        @Override
+        public ListIterator<Integer> listIterator() {
+            return tabs.listIterator();
+        }
+
+        @Override
+        public ListIterator<Integer> listIterator(int index) {
+            return tabs.listIterator(index);
+        }
+
+        @Override
+        public List<Integer> subList(int fromIndex, int toIndex) {
+            return tabs.subList(fromIndex, toIndex);
+        }
+
+        @Override
+        public boolean contains(Object o) {
+            return tabs.contains(o);
+        }
+
+        @Override
+        public int indexOf(Object o) {
+            return tabs.indexOf(o);
+        }
+
+        @Override
+        public int lastIndexOf(Object o) {
+            return tabs.lastIndexOf(o);
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return tabs.isEmpty();
+        }
+
+        @Override
+        public Object[] toArray() {
+            return tabs.toArray();
+        }
+
+        @Override
+        public <T> T[] toArray(T[] a) {
+            return tabs.toArray(a);
+        }
+
+        @Override
+        public String toString() {
+            return tabs.toString();
+        }
     }
 
 
