@@ -64,6 +64,9 @@ public class SeparateGroup extends Feature {
             // Inject actual tab after UI init
             hookOnResume(homeActivityClass);
 
+            // Hook TabLayout.addTab() to inject GROUPS tab
+            hookTabLayoutAddTab();
+
             // Setting group icon - DISABLED for now due to crashes
             // hookTabIcon();
 
@@ -365,6 +368,17 @@ public class SeparateGroup extends Feature {
         }
     }
 
+    private void hookTabLayoutAddTab() {
+        try {
+            // Since TabLayout is obfuscated in this WhatsApp version,
+            // we cannot directly hook TabLayout.addTab().
+            // Instead, we modify the tabs list in hookTabList() before TabLayout uses it.
+            XposedBridge.log("SeparateGroup: TabLayout is obfuscated, using list modification approach");
+        } catch (Exception e) {
+            XposedBridge.log("SeparateGroup: Error in hookTabLayoutAddTab: " + e.getMessage());
+        }
+    }
+
     private void hookTabList(@NonNull Class<?> home) throws Exception {
         var onCreateTabList = Unobfuscator.loadTabListMethod(classLoader);
         logDebug(Unobfuscator.getMethodDescriptor(onCreateTabList));
@@ -376,12 +390,37 @@ public class SeparateGroup extends Feature {
         XposedBridge.hookMethod(onCreateTabList, new XC_MethodHook() {
             @Override
             @SuppressWarnings("unchecked")
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                XposedBridge.log("SeparateGroup: [hookTabList] beforeHookedMethod called");
                 try {
-                    if (!prefs.getBoolean("separategroups", false)) return;
+                    if (!prefs.getBoolean("separategroups", false)) {
+                        XposedBridge.log("SeparateGroup: [hookTabList] separategroups pref is false");
+                        return;
+                    }
+                    
+                    // At this point, onCreate hasn't finished yet, so the list might not be set
+                    // We'll handle this in the afterHookedMethod instead
+                    XposedBridge.log("SeparateGroup: [hookTabList] beforeHookedMethod - will wait for afterHookedMethod");
+                } catch (Exception e) {
+                    XposedBridge.log("SeparateGroup: Exception in hookTabList beforeHookedMethod: " + e.getMessage());
+                }
+            }
+            
+            @Override
+            @SuppressWarnings("unchecked")
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                XposedBridge.log("SeparateGroup: [hookTabList] afterHookedMethod called");
+                try {
+                    if (!prefs.getBoolean("separategroups", false)) {
+                        XposedBridge.log("SeparateGroup: [hookTabList] separategroups pref is false in afterHook");
+                        return;
+                    }
                     
                     var listObj = fieldTabsList.get(param.thisObject);
+                    XposedBridge.log("SeparateGroup: [hookTabList] listObj type: " + (listObj == null ? "null" : listObj.getClass().getName()));
+                    
                     if (!(listObj instanceof List<?> rawList)) {
+                        XposedBridge.log("SeparateGroup: [hookTabList] listObj is not a List");
                         return;
                     }
 
@@ -391,18 +430,44 @@ public class SeparateGroup extends Feature {
                             currentTabs.add(tabId);
                         }
                     }
+                    
+                    XposedBridge.log("SeparateGroup: [hookTabList] Current tabs in list: " + currentTabs);
 
-                    // Only populate static tabs list with GROUPS - don't modify actual list
-                    // The actual list will be accessed later via getCount() etc which we intercept
+                    // If GROUPS not already present, try to add it to the list
                     if (!currentTabs.isEmpty() && currentTabs.contains(CHATS) && !currentTabs.contains(GROUPS)) {
-                        tabs = new ArrayList<>(currentTabs);
-                        tabs.add(tabs.indexOf(CHATS) + 1, GROUPS);
-                        XposedBridge.log("SeparateGroup: [hookTabList] Static tabs initialized with GROUPS: " + tabs);
+                        try {
+                            // Try to modify the actual list directly
+                            // BUT wrap in exception handler since TabLayout might not allow this
+                            int chatsIndex = rawList.indexOf(CHATS);
+                            if (chatsIndex >= 0) {
+                                XposedBridge.log("SeparateGroup: [hookTabList] CHATS index: " + chatsIndex + ", attempting to insert GROUPS");
+                                try {
+                                    @SuppressWarnings("unchecked")
+                                    List<Integer> intList = (List<Integer>) rawList;
+                                    intList.add(chatsIndex + 1, GROUPS);
+                                    tabs = new ArrayList<>(intList);
+                                    XposedBridge.log("SeparateGroup: [hookTabList] Successfully injected GROUPS into list: " + tabs);
+                                } catch (UnsupportedOperationException | ClassCastException listOpError) {
+                                    XposedBridge.log("SeparateGroup: [hookTabList] Cannot modify list directly (likely immutable): " + listOpError.getMessage());
+                                    // Fall back to static list approach
+                                    tabs = new ArrayList<>(currentTabs);
+                                    tabs.add(tabs.indexOf(CHATS) + 1, GROUPS);
+                                    XposedBridge.log("SeparateGroup: [hookTabList] Using static tabs list: " + tabs);
+                                }
+                            }
+                        } catch (Exception listModError) {
+                            XposedBridge.log("SeparateGroup: [hookTabList] Error during list modification: " + listModError.getMessage());
+                            listModError.printStackTrace();
+                            tabs = new ArrayList<>(currentTabs);
+                            tabs.add(tabs.indexOf(CHATS) + 1, GROUPS);
+                        }
                     } else {
                         tabs = new ArrayList<>(currentTabs);
+                        XposedBridge.log("SeparateGroup: [hookTabList] No modification needed, tabs: " + tabs);
                     }
                 } catch (Exception e) {
-                    XposedBridge.log("SeparateGroup: Exception in hookTabList: " + e.getMessage());
+                    XposedBridge.log("SeparateGroup: Exception in hookTabList afterHookedMethod: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
         });
