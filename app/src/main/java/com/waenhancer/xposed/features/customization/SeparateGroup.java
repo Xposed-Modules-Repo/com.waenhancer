@@ -20,8 +20,6 @@ import com.waenhancer.xposed.utils.DebugUtils;
 import com.waenhancer.xposed.utils.ReflectionUtils;
 import com.waenhancer.xposed.utils.Utils;
 
-import org.luckypray.dexkit.query.enums.StringMatchType;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -58,8 +56,10 @@ public class SeparateGroup extends Feature {
         var cFragClass = XposedHelpers.findClass("com.whatsapp.conversationslist.ConversationsFragment", classLoader);
         var homeActivityClass = WppCore.getHomeActivityClass(classLoader);
 
-        // Enable for testing - will be disabled by default in production
-        if (!prefs.getBoolean("separategroups", true)) return;
+        // For testing: enable the feature (user requested to test it)
+        boolean shouldEnable = prefs.getBoolean("separategroups", true); // Default to true for testing
+
+        if (!shouldEnable) return;
 
         featureEnabled = true;
         statusFallbackMode = false;
@@ -380,139 +380,15 @@ public class SeparateGroup extends Feature {
         });
     }
 
-    private List filterChat(Object convFragment, List chatsList) {
-        try {
-            // Safety check: if tabs list is not properly populated, don't filter
-            if (tabs == null || tabs.isEmpty()) {
-                XposedBridge.log("SeparateGroup: filterChat - tabs list not populated, returning all chats");
-                return chatsList;
-            }
-            
-            // IMPORTANT: In object-backed/fallback mode, we can't reliably filter
-            // because we don't have proper tab identification. Return all chats to prevent duplicates.
-            if (statusFallbackMode) {
-                XposedBridge.log("SeparateGroup: filterChat - In fallback mode, returning all chats unfiltered");
-                return chatsList;
-            }
-            
-            var resolvedTabId = resolveChatTabId();
-            if (convFragment instanceof java.util.LinkedHashSet) {
-                XposedBridge.log("SeparateGroup: filterChat skipping LinkedHashSet");
-                return chatsList;
-            }
-            if (tabInstances.isEmpty()) {
-                XposedBridge.log("SeparateGroup: filterChat - tabInstances empty, returning all chats");
-                return chatsList;
-            }
-
-            XposedBridge.log("SeparateGroup: filterChat called with fragment=" + convFragment.getClass().getSimpleName() + ", resolvedTabId=" + resolvedTabId + ", tabInstances=" + tabInstances.keySet() + ", tabs=" + tabs);
-
-            if (tabInstances.containsKey(GROUPS) && Objects.equals(tabInstances.get(GROUPS), convFragment)) {
-                XposedBridge.log("SeparateGroup: Filtering for GROUPS tab");
-                var filtered = filterChatByGroup(chatsList, true);
-                XposedBridge.log("SeparateGroup: GROUPS tab filtered result: " + filtered.size() + " chats");
-                return filtered;
-            }
-            if (Objects.equals(tabInstances.get(resolvedTabId), convFragment) || Objects.equals(tabInstances.get(CHATS), convFragment)) {
-                XposedBridge.log("SeparateGroup: Filtering for CHATS tab (resolvedTabId=" + resolvedTabId + ")");
-                var filtered = filterChatByGroup(chatsList, false);
-                XposedBridge.log("SeparateGroup: CHATS tab filtered result: " + filtered.size() + " chats");
-                return filtered;
-            }
-            if (statusFallbackMode && tabInstances.containsKey(fallbackGroupTabId) && Objects.equals(tabInstances.get(fallbackGroupTabId), convFragment)) {
-                XposedBridge.log("SeparateGroup: Filtering for fallbackGroupTabId=" + fallbackGroupTabId);
-                var filtered = filterChatByGroup(chatsList, true);
-                XposedBridge.log("SeparateGroup: Fallback tab filtered result: " + filtered.size() + " chats");
-                return filtered;
-            }
-            
-            XposedBridge.log("SeparateGroup: filterChat - no matching tabInstance found, returning all chats");
-        } catch (Throwable ignored) {
-            XposedBridge.log("SeparateGroup: filterChat exception: " + ignored);
-            ignored.printStackTrace();
+    private List filterChat(Object thiz, List chatsList) {
+        var tabChat = tabInstances.get(CHATS);
+        var tabGroup = tabInstances.get(GROUPS);
+        if (!Objects.equals(tabChat, thiz) && !Objects.equals(tabGroup, thiz)) {
+            return chatsList;
         }
-        return chatsList;
-    }
-
-    private List filterChatByGroup(List chats, boolean isGroups) {
-        try {
-            var result = new ArrayList();
-            synchronized (SeparateGroup.class) {
-                var db = MessageStore.getInstance().getDatabase();
-                if (db == null) {
-                    XposedBridge.log("SeparateGroup: filterChatByGroup - Database is null, returning all chats");
-                    return chats;
-                }
-                
-                // Find the Jid class dynamically (handles obfuscation)
-                Class<?> jidClass = null;
-                try {
-                    jidClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "jid.Jid");
-                    XposedBridge.log("SeparateGroup: Found Jid class: " + jidClass.getName());
-                } catch (Throwable e) {
-                    XposedBridge.log("SeparateGroup: Could not find Jid class: " + e);
-                    // If we can't find the class, just return all chats
-                    return chats;
-                }
-                
-                if (jidClass == null) {
-                    XposedBridge.log("SeparateGroup: filterChatByGroup - Jid class is null, returning all chats");
-                    return chats;
-                }
-                
-                int successCount = 0;
-                int skipCount = 0;
-                
-                for (Object chat : chats) {
-                    try {
-                        // Get jid field by type (now using discovered class)
-                        var jidField = ReflectionUtils.getFieldByType(chat.getClass(), jidClass);
-                        if (jidField == null) {
-                            skipCount++;
-                            continue;
-                        }
-                        
-                        var jidObj = ReflectionUtils.getObjectField(jidField, chat);
-                        if (jidObj == null) {
-                            skipCount++;
-                            continue;
-                        }
-
-                        // Get raw string from jid
-                        var jidStr = jidObj.toString();
-                        
-                        var sql = "SELECT * FROM jid WHERE raw_string = ?";
-                        var cursor = db.rawQuery(sql, new String[]{jidStr});
-                        if (!cursor.moveToFirst()) {
-                            cursor.close();
-                            skipCount++;
-                            continue;
-                        }
-
-                        var server = cursor.getString(cursor.getColumnIndex("server"));
-                        var isGroup = server.equals("g.us");
-                        cursor.close();
-
-                        if ((isGroups && isGroup) || (!isGroups && !isGroup)) {
-                            result.add(chat);
-                            successCount++;
-                        }
-                    } catch (Throwable e) {
-                        // On first error, log it and return all chats  to be safe
-                        XposedBridge.log("SeparateGroup: filterChatByGroup - Error processing chat, falling back: " + e);
-                        XposedBridge.log("SeparateGroup: filterChatByGroup will return all chats for safety");
-                        return chats;
-                    }
-                }
-                
-                XposedBridge.log("SeparateGroup: filterChatByGroup - Input=" + chats.size() + ", Output=" + result.size() + ", Success=" + successCount + ", Skipped=" + skipCount);
-            }
-            return result;
-        } catch (Throwable throwable) {
-            XposedBridge.log("SeparateGroup: filterChatByGroup fatal error: " + throwable);
-            throwable.printStackTrace();
-            return chats;
-        }
+        var editableChatList = new ArrayListFilter(Objects.equals(tabGroup, thiz));
+        editableChatList.addAll(chatsList);
+        return editableChatList;
     }
 
     private void injectGroupsTab(@NonNull Object homeInstance, java.lang.reflect.Field preferredField) {
@@ -532,17 +408,6 @@ public class SeparateGroup extends Feature {
             if (!loggedTabListSearchShape) {
                 loggedTabListSearchShape = true;
                 XposedBridge.log("SeparateGroup: Tab-list search failed for class " + homeInstance.getClass().getName());
-                XposedBridge.log("SeparateGroup: Using fallback tab configuration");
-            }
-            // Fallback: create default tab configuration
-            if (tabs.isEmpty()) {
-                tabs.clear();
-                tabs.add(CHATS);
-                tabs.add(GROUPS);
-                tabs.add(STATUS);
-                tabs.add(400); // CALLS
-                tabs.add(600); // COMMUNITY
-                XposedBridge.log("SeparateGroup: Created fallback tabs: " + tabs);
             }
             return;
         }
@@ -554,8 +419,6 @@ public class SeparateGroup extends Feature {
                 return;
             }
 
-            XposedBridge.log("SeparateGroup: Found tab list with " + rawList.size() + " items");
-
             boolean allNumeric = true;
             for (Object item : rawList) {
                 if (!(item instanceof Integer) && !(item instanceof Number)) {
@@ -564,7 +427,7 @@ public class SeparateGroup extends Feature {
                 }
             }
             if (!rawList.isEmpty() && !allNumeric) {
-                XposedBridge.log("SeparateGroup: Tabs are object-backed (not numeric)");
+                XposedBridge.log("SeparateGroup: Skipping field injection (object-backed tabs)");
                 enableStatusFallback(rawList, "field object-backed list");
                 return;
             }
@@ -580,14 +443,14 @@ public class SeparateGroup extends Feature {
             tabs = mutableTabs;
             statusFallbackMode = false;
             var resolvedChatTabId = resolveChatTabId();
-            XposedBridge.log("SeparateGroup: Current tabs before injection: " + tabs + " (chatTabId=" + resolvedChatTabId + ")");
+            XposedBridge.log("SeparateGroup: Current tabs before: " + tabs + " (field=" + listField.getName() + ", chatTabId=" + resolvedChatTabId + ")");
 
             if (!tabs.isEmpty() && tabs.contains(resolvedChatTabId) && !tabs.contains(GROUPS)) {
                 tabs.add(tabs.indexOf(resolvedChatTabId) + 1, GROUPS);
                 XposedBridge.log("SeparateGroup: Injected GROUPS tab. Current tabs: " + tabs);
             } else if (!tabs.isEmpty() && !tabs.contains(GROUPS)) {
                 tabs.add(1 <= tabs.size() ? 1 : 0, GROUPS);
-                XposedBridge.log("SeparateGroup: Injected GROUPS tab at fallback position. Current tabs: " + tabs);
+                XposedBridge.log("SeparateGroup: Injected GROUPS tab using fallback position. Current tabs: " + tabs);
             } else if (tabs.isEmpty()) {
                 XposedBridge.log("SeparateGroup: Skipping injection (list is empty)");
             } else if (!tabs.contains(resolvedChatTabId)) {
@@ -597,7 +460,6 @@ public class SeparateGroup extends Feature {
             }
         } catch (Throwable throwable) {
             XposedBridge.log("SeparateGroup: Injection failed: " + throwable);
-            throwable.printStackTrace();
         }
     }
 
@@ -804,6 +666,53 @@ public class SeparateGroup extends Feature {
         TabListRef(Object owner, java.lang.reflect.Field field) {
             this.owner = owner;
             this.field = field;
+        }
+    }
+
+    public static class ArrayListFilter extends ArrayList<Object> {
+
+        private final boolean isGroup;
+
+        public ArrayListFilter(boolean isGroup) {
+            this.isGroup = isGroup;
+        }
+
+        @Override
+        public void add(int index, Object element) {
+            if (checkGroup(element)) {
+                super.add(index, element);
+            }
+        }
+
+        @Override
+        public boolean add(Object object) {
+            if (checkGroup(object)) {
+                return super.add(object);
+            }
+            return true;
+        }
+
+        @Override
+        public boolean addAll(@NonNull Collection c) {
+            for (var chat : c) {
+                if (checkGroup(chat)) {
+                    super.add(chat);
+                }
+            }
+            return true;
+        }
+
+        private boolean checkGroup(Object chat) {
+            var jid = getObjectField(chat, "A00");
+            if (jid == null) jid = getObjectField(chat, "A01");
+            if (jid == null) return true;
+            if (XposedHelpers.findMethodExactIfExists(jid.getClass(), "getServer") != null) {
+                var server = (String) callMethod(jid, "getServer");
+                if (isGroup)
+                    return server.equals("broadcast") || server.equals("g.us");
+                return server.equals("s.whatsapp.net") || server.equals("lid");
+            }
+            return true;
         }
     }
 }
