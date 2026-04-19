@@ -388,6 +388,13 @@ public class SeparateGroup extends Feature {
                 return chatsList;
             }
             
+            // IMPORTANT: In object-backed/fallback mode, we can't reliably filter
+            // because we don't have proper tab identification. Return all chats to prevent duplicates.
+            if (statusFallbackMode) {
+                XposedBridge.log("SeparateGroup: filterChat - In fallback mode, returning all chats unfiltered");
+                return chatsList;
+            }
+            
             var resolvedTabId = resolveChatTabId();
             if (convFragment instanceof java.util.LinkedHashSet) {
                 XposedBridge.log("SeparateGroup: filterChat skipping LinkedHashSet");
