@@ -28,6 +28,7 @@ import com.waenhancer.xposed.core.components.WaContactWpp;
 import com.waenhancer.xposed.core.devkit.Unobfuscator;
 import com.waenhancer.xposed.core.devkit.UnobfuscatorCache;
 import com.waenhancer.xposed.features.customization.BubbleColors;
+import com.waenhancer.xposed.features.customization.ChatScrollButtons;
 import com.waenhancer.xposed.features.customization.ContactBlockedVerify;
 import com.waenhancer.xposed.features.customization.CustomThemeV2;
 import com.waenhancer.xposed.features.customization.CustomTime;
@@ -377,6 +378,7 @@ public class FeatureLoader {
                 AntiRevoke.class,
                 CustomToolbar.class,
                 CustomView.class,
+                ChatScrollButtons.class,
                 SeenTick.class,
                 BubbleColors.class,
                 CallPrivacy.class,
