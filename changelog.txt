@@ -1,5 +1,9 @@
+[Added]
+- Added Go to first message in chat (enabled by deault)
 
 [FIXED]
-- Fixed GroupAdmin error
-- Temporarily disabled seperate Group tab in unsupported WhatsApp versions due to their new design architecture.
-- Improved performance
+- Fixed double-click to react feature with proper touch listener implementation
+- Fixed update checker
+
+[IMPROVED]
+- Removed unnecessary logs and debug output for cleaner codebase

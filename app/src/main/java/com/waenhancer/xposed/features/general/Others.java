@@ -8,6 +8,7 @@ import android.os.Message;
 import android.os.PowerManager;
 import android.text.TextUtils;
 import android.view.Menu;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -15,7 +16,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
-import com.waenhancer.listeners.OnMultiClickListener;
 import com.waenhancer.xposed.core.Feature;
 import com.waenhancer.xposed.core.WppCore;
 import com.waenhancer.xposed.core.components.FMessageWpp;
@@ -402,39 +402,50 @@ public class Others extends Feature {
 
         var emoji = prefs.getString("doubletap2like_emoji", "👍");
 
-
         var conversationRowClass = Unobfuscator.loadConversationRowClass(classLoader);
         logDebug("Conversation Row", conversationRowClass);
-
-        XposedBridge.hookAllConstructors(conversationRowClass, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                var viewGroup = (ViewGroup) param.thisObject;
-                viewGroup.setOnTouchListener(null);
-            }
-        });
 
         ConversationItemListener.conversationListeners.add(new ConversationItemListener.OnConversationItemListener() {
             @Override
             public void onItemBind(FMessageWpp fMessage, ViewGroup viewGroup) {
-                var onMultiClickListener = new OnMultiClickListener(2, 500) {
+                var doubleTapListener = new View.OnTouchListener() {
+                    private long lastTapTime = 0;
+                    private final long DOUBLE_TAP_TIMEOUT = 300;
+
                     @Override
-                    public void onMultiClick(View view) {
-                        var reactionView = (ViewGroup) view.findViewById(Utils.getID("reactions_bubble_layout", "id"));
-                        if (reactionView != null && reactionView.getVisibility() == View.VISIBLE) {
-                            for (int i = 0; i < reactionView.getChildCount(); i++) {
-                                if (reactionView.getChildAt(i) instanceof TextView textView) {
-                                    if (textView.getText().toString().contains(emoji)) {
-                                        WppCore.sendReaction("", fMessage.getObject());
-                                        return;
-                                    }
+                    public boolean onTouch(View v, MotionEvent event) {
+                        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                            long currentTime = System.currentTimeMillis();
+                            if (currentTime - lastTapTime <= DOUBLE_TAP_TIMEOUT) {
+                                lastTapTime = 0;
+                                handleDoubleTap(viewGroup, fMessage);
+                                return true;
+                            }
+                            lastTapTime = currentTime;
+                        }
+                        return false;
+                    }
+                };
+                viewGroup.setOnTouchListener(doubleTapListener);
+            }
+
+            private void handleDoubleTap(ViewGroup viewGroup, FMessageWpp fMessage) {
+                try {
+                    var reactionView = (ViewGroup) viewGroup.findViewById(Utils.getID("reactions_bubble_layout", "id"));
+                    if (reactionView != null && reactionView.getVisibility() == View.VISIBLE) {
+                        for (int i = 0; i < reactionView.getChildCount(); i++) {
+                            if (reactionView.getChildAt(i) instanceof TextView textView) {
+                                if (textView.getText().toString().contains(emoji)) {
+                                    WppCore.sendReaction("", fMessage.getObject());
+                                    return;
                                 }
                             }
                         }
-                        WppCore.sendReaction(emoji, fMessage.getObject());
                     }
-                };
-                viewGroup.setOnClickListener(onMultiClickListener);
+                    WppCore.sendReaction(emoji, fMessage.getObject());
+                } catch (Exception e) {
+                    logDebug("Double tap reaction error", e);
+                }
             }
         });
     }

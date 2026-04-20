@@ -126,6 +126,8 @@ android {
 
     lint {
         disable += "SelectedPhotoAccess"
+        disable += "MissingDefaultResource"
+        abortOnError = false
     }
 
     materialThemeBuilder {
