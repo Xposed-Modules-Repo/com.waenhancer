@@ -208,7 +208,7 @@ jobs:
           echo "$EOF" >> "$GITHUB_OUTPUT"
 
       - name: Post release to Telegram
-        if: ${{ env.RELEASE_PRERELEASE == 'false' && secrets.BOT_TOKEN != '' && secrets.CHANNEL_ID != '' }}
+        if: env.RELEASE_PRERELEASE == 'false' && secrets.BOT_TOKEN != '' && secrets.CHANNEL_ID != ''
         env:
           CHANGELOG_BODY: ${{ steps.changelog.outputs.body }}
           RELEASE_URL: ${{ steps.release.outputs.url }}
