@@ -63,6 +63,7 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
     public void onResume() {
         super.onResume();
         setDisplayHomeAsUpEnabled(true);
+        initializeReleaseChannelPreference();
     }
 
     @Override
@@ -502,5 +503,30 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
                 view.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             }
         }, 1500);
+    }
+
+    private void initializeReleaseChannelPreference() {
+        try {
+            var pref = findPreference("release_channel");
+            if (pref == null) return;
+
+            String installedVersion = "";
+            try {
+                var pkgInfo = requireContext().getPackageManager().getPackageInfo(BuildConfig.APPLICATION_ID, 0);
+                installedVersion = pkgInfo.versionName != null ? pkgInfo.versionName : "";
+            } catch (Exception ignored) {
+            }
+
+            boolean installedIsBeta = installedVersion.contains("-beta-");
+            String currentPref = mPrefs.getString("release_channel", "stable");
+
+            // Sync preference with installed version to avoid mismatched state
+            if (installedIsBeta && !"beta".equals(currentPref)) {
+                mPrefs.edit().putString("release_channel", "beta").apply();
+            } else if (!installedIsBeta && !"stable".equals(currentPref)) {
+                mPrefs.edit().putString("release_channel", "stable").apply();
+            }
+        } catch (Exception ignored) {
+        }
     }
 }

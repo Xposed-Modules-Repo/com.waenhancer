@@ -200,12 +200,13 @@ public class UpdateChecker implements Runnable {
                 writeDebugLog(showMsg);
 
                 final String finalLatestVersion = latestVersion;
+                final String finalTagName = tagName;
                 final String finalChangelog = changelog;
                 final String finalPublishedAt = publishedAt;
 
                 mActivity.runOnUiThread(() -> {
                     try {
-                        showUpdateDialog(finalLatestVersion, finalChangelog, finalPublishedAt);
+                        showUpdateDialog(finalLatestVersion, finalTagName, finalChangelog, finalPublishedAt);
                     } catch (Exception e) {
                         String errorMsg = "[UpdateChecker] Error showing update dialog: " + e.getMessage();
                         XposedBridge.log("[" + TAG + "] " + errorMsg);
@@ -252,10 +253,13 @@ public class UpdateChecker implements Runnable {
         }
     }
 
-    private void showUpdateDialog(String hash, String changelog, String publishedAt) {
+    private void showUpdateDialog(String hash, String tagName, String changelog, String publishedAt) {
         try {
             var markwon = Markwon.create(mActivity);
             var dialog = new AlertDialogWpp(mActivity);
+
+            String releaseBadge = getReleaseTypeBadge(tagName);
+            String title = (releaseBadge != null && !releaseBadge.isEmpty() ? releaseBadge + " " : "") + "New Update Available!";
 
             // Format the published date
             String formattedDate = formatPublishedDate(publishedAt);
@@ -268,10 +272,9 @@ public class UpdateChecker implements Runnable {
             }
             message.append("\n### What's New\n\n").append(changelog);
 
-            dialog.setTitle("🎉 New Update Available!");
+            dialog.setTitle(title);
             dialog.setMessage(markwon.toMarkdown(message.toString()));
             dialog.setNegativeButton("Ignore", (dialog1, which) -> {
-                // Just dismiss - don't store as ignored, so update check will show again next time
                 dialog1.dismiss();
             });
             dialog.setPositiveButton("Download", (dialog1, which) -> {
@@ -345,20 +348,57 @@ public class UpdateChecker implements Runnable {
     }
 
     private static long versionToLong(String version) {
-        // Remove all non-numeric characters and convert to long
-        // "1.5.7" -> "157" -> 157L
         String normalized = normalizeVersion(version);
-        String digitsOnly = normalized.replaceAll("[^0-9]", "");
-        
-        writeDebugLog("[versionToLong] Input: '" + version + "' → Normalized: '" + normalized + "' → Digits: '" + digitsOnly + "'");
-        
+        boolean isBeta = normalized.contains("-beta-");
+
+        String baseVersion = normalized;
+        int betaIndex = normalized.indexOf("-beta-");
+        if (betaIndex > 0) {
+            baseVersion = normalized.substring(0, betaIndex);
+        }
+
+        String digitsOnly = baseVersion.replaceAll("[^0-9]", "");
+
         try {
-            long result = digitsOnly.isEmpty() ? 0L : Long.parseLong(digitsOnly);
-            writeDebugLog("[versionToLong] Parsed to: " + result);
+            long baseNum = digitsOnly.isEmpty() ? 0L : Long.parseLong(digitsOnly);
+            long result;
+            if (isBeta) {
+                // Make beta versions numerically just below the stable version
+                result = baseNum * 100 - 1;
+            } else {
+                result = baseNum * 100;
+            }
+
+            writeDebugLog("[versionToLong] '" + version + "' → " + result);
             return result;
         } catch (NumberFormatException e) {
-            writeDebugLog("[versionToLong] Failed to parse version '" + version + "' as number: " + e.getMessage());
+            writeDebugLog("[versionToLong] Failed to parse '" + version + "': " + e.getMessage());
             return 0L;
         }
     }
+
+    private boolean isInstalledVersionBeta(String versionName) {
+        return versionName != null && versionName.contains("-beta-");
+    }
+
+    private String getReleaseChannelPreference() {
+        String channel = WppCore.getPrivString("release_channel", "stable");
+        writeDebugLog("[getReleaseChannelPreference] User preference: " + channel);
+        return channel;
+    }
+
+    private boolean shouldShowReleaseType(String releaseTagName, String userChannel) {
+        boolean isBetaRelease = releaseTagName != null && releaseTagName.contains("-beta-");
+        boolean userWantsBeta = "beta".equals(userChannel);
+        if (userWantsBeta) return true;
+        return !isBetaRelease;
+    }
+
+    private String getReleaseTypeBadge(String releaseTagName) {
+        if (releaseTagName != null && releaseTagName.contains("-beta-")) {
+            return "🧪 BETA:";
+        }
+        return "⭐ STABLE:";
+    }
 }
+
