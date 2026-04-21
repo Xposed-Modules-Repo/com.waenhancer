@@ -1,7 +1,9 @@
 ## Introducing Update Channel Selection
 
 [Added]
-- Implemented release channel preference [stable/beta]
+- Implemented In-App Update
 
 [Fixes]
 - Fixed update checker
+- Fixed crash on startup
+- Fixed hooks initialization
