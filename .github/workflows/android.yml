@@ -2,18 +2,45 @@ name: Android CI
 
 on:
   push:
-    branches: ["master", "feature/*"]
+    branches: ["master", "beta"]
+
 jobs:
+  check-build-flag:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.flags.outputs.should_build }}
+      release_type: ${{ steps.flags.outputs.release_type }}
+    steps:
+      - name: Detect build flag and release type
+        id: flags
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          BRANCH="${GITHUB_REF#refs/heads/}"
+
+          if [[ "$COMMIT_MSG" =~ [[:space:]]--build$ ]]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ "$BRANCH" == "beta" ]]; then
+            echo "release_type=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_type=stable" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: check-build-flag
+    if: needs.check-build-flag.outputs.should_build == 'true'
     permissions: write-all
     runs-on: ubuntu-latest
     env:
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
       CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
-    if: github.event_name == 'push' && !contains(github.event.head_commit.message, 'Merge') && !contains(github.event.head_commit.message, 'web')
     steps:
       - uses: actions/checkout@v6
-      - name: set up JDK 17
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           java-version: "17"
@@ -25,46 +52,74 @@ jobs:
             gradle/libs.versions.toml
             **/gradle.properties
 
-
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Remove local properties
         run: sed -i '/org.gradle.java.home/d' gradle.properties
 
-      - name: Auto-increment Version
+      - name: Calculate and bump version
         run: |
-          # Read current values
-          VERSION_CODE=$(grep 'VERSION_CODE' gradle.properties | cut -d'=' -f2)
-          VERSION_NAME=$(grep 'VERSION_NAME' gradle.properties | cut -d'=' -f2)
-          
-          # Increment Version Code
-          NEW_VERSION_CODE=$((VERSION_CODE + 1))
-          
-          # Increment Patch Version (the last digit)
-          BASE_VERSION=$(echo $VERSION_NAME | cut -d'.' -f1,2)
-          PATCH=$(echo $VERSION_NAME | cut -d'.' -f3)
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION_NAME="$BASE_VERSION.$NEW_PATCH"
-          
-          # Update gradle.properties
-          sed -i "s/VERSION_CODE=.*/VERSION_CODE=$NEW_VERSION_CODE/" gradle.properties
-          sed -i "s/VERSION_NAME=.*/VERSION_NAME=$NEW_VERSION_NAME/" gradle.properties
-          
-          echo "Bumping version from $VERSION_NAME ($VERSION_CODE) -> $NEW_VERSION_NAME ($NEW_VERSION_CODE)"
-          echo "NEW_VERSION_NAME=$NEW_VERSION_NAME" >> $GITHUB_ENV
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          VERSION_CODE="$(grep '^VERSION_CODE=' gradle.properties | cut -d'=' -f2 | tr -d '\r\n')"
+          VERSION_NAME="$(grep '^VERSION_NAME=' gradle.properties | cut -d'=' -f2 | tr -d '\r\n')"
 
-          # Commit and Push back to GitHub
+          if [[ "$BRANCH" == "beta" ]]; then
+            RELEASE_PRERELEASE="true"
+
+            if [[ "$VERSION_NAME" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta-([0-9]+)$ ]]; then
+              BASE_VERSION="${BASH_REMATCH[1]}"
+              BETA_NUM="${BASH_REMATCH[2]}"
+              NEW_BETA_NUM=$((BETA_NUM + 1))
+              NEW_VERSION_NAME="${BASE_VERSION}-beta-${NEW_BETA_NUM}"
+            elif [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              NEW_VERSION_NAME="${VERSION_NAME}-beta-1"
+            else
+              echo "Unsupported VERSION_NAME format for beta branch: $VERSION_NAME"
+              exit 1
+            fi
+
+            NEW_VERSION_CODE="$VERSION_CODE"
+            RELEASE_TYPE="BETA"
+          else
+            RELEASE_PRERELEASE="false"
+
+            BASE_VERSION="$VERSION_NAME"
+            if [[ "$BASE_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta-[0-9]+$ ]]; then
+              BASE_VERSION="${BASH_REMATCH[1]}"
+            fi
+
+            if [[ ! "$BASE_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "Unsupported VERSION_NAME format for master branch: $VERSION_NAME"
+              exit 1
+            fi
+
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION_NAME="${MAJOR}.${MINOR}.${NEW_PATCH}"
+            NEW_VERSION_CODE=$((VERSION_CODE + 1))
+            RELEASE_TYPE="STABLE"
+          fi
+
+          sed -i "s/^VERSION_CODE=.*/VERSION_CODE=${NEW_VERSION_CODE}/" gradle.properties
+          sed -i "s/^VERSION_NAME=.*/VERSION_NAME=${NEW_VERSION_NAME}/" gradle.properties
+
+          echo "NEW_VERSION_NAME=$NEW_VERSION_NAME" >> "$GITHUB_ENV"
+          echo "NEW_VERSION_CODE=$NEW_VERSION_CODE" >> "$GITHUB_ENV"
+          echo "RELEASE_PRERELEASE=$RELEASE_PRERELEASE" >> "$GITHUB_ENV"
+          echo "RELEASE_TYPE=$RELEASE_TYPE" >> "$GITHUB_ENV"
+
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add gradle.properties
-          git commit -m "Bump version to $NEW_VERSION_NAME ($NEW_VERSION_CODE) [skip ci]"
+          git commit -m "chore(release): bump to ${NEW_VERSION_NAME} (${NEW_VERSION_CODE}) [skip ci]"
           git push
 
       - name: Build WhatsApp flavor
         run: |
-          if [ ! -z "${{ secrets.KEY_STORE }}" ]; then
+          if [ -n "${{ secrets.KEY_STORE }}" ]; then
             echo "${{ secrets.KEY_STORE }}" | base64 --decode > release.jks
             ./gradlew assembleWhatsappDebug -Pminify=true \
               -PandroidStoreFile=release.jks \
@@ -75,21 +130,16 @@ jobs:
             ./gradlew assembleWhatsappDebug -Pminify=true
           fi
 
-      - name: Get short SHA
-        run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-7`" >> $GITHUB_ENV
-
       - name: Rename APK to versioned name
         run: |
           mkdir -p release_artifacts
-          VERSION=${{ env.NEW_VERSION_NAME }}
-          cp app/build/outputs/apk/whatsapp/debug/app-whatsapp-debug.apk release_artifacts/WaEnhancer-v${VERSION}.apk
+          cp app/build/outputs/apk/whatsapp/debug/app-whatsapp-debug.apk "release_artifacts/WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk"
 
       - name: Upload WhatsApp flavor artifact
         uses: actions/upload-artifact@v5
         with:
           name: WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk
           path: release_artifacts/WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk
-
 
       - name: Upload to GitHub release
         id: release
@@ -101,23 +151,24 @@ jobs:
           files: |
             release_artifacts/WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk
           tag_name: ${{ env.NEW_VERSION_NAME }}
+          prerelease: ${{ env.RELEASE_PRERELEASE }}
 
       - name: Read changelog
         id: changelog
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64 | tr -dc 'a-zA-Z0-9')
-          echo "body<<$EOF" >> $GITHUB_OUTPUT
-          sed '/./,$!d' changelog.txt >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "$EOF" >> $GITHUB_OUTPUT
+          echo "body<<$EOF" >> "$GITHUB_OUTPUT"
+          sed '/./,$!d' changelog.txt >> "$GITHUB_OUTPUT"
+          echo "" >> "$GITHUB_OUTPUT"
+          echo "$EOF" >> "$GITHUB_OUTPUT"
 
       - name: Post release to Telegram channel
-        if: ${{ env.BOT_TOKEN != '' && env.CHANNEL_ID != '' }}
+        if: ${{ env.BOT_TOKEN != '' && env.CHANNEL_ID != '' && env.RELEASE_TYPE == 'STABLE' }}
         env:
           CHANGELOG_BODY: ${{ steps.changelog.outputs.body }}
           RELEASE_URL: ${{ steps.release.outputs.url }}
         run: |
-          FULL_MESSAGE="$(printf '%s\n\nRelease: %s' "$CHANGELOG_BODY" "$RELEASE_URL")"
+          FULL_MESSAGE="$(printf '%s %s\n\n%s\n\nRelease: %s' "${{ env.RELEASE_TYPE }}" "${{ env.NEW_VERSION_NAME }}" "$CHANGELOG_BODY" "$RELEASE_URL")"
 
           curl -f -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.CHANNEL_ID }}" \
