@@ -267,7 +267,7 @@ public class FeatureLoader {
             if (state == WppCore.ActivityChangeState.ChangeType.RESUMED) {
                 checkUpdate(activity);
 
-                if (App.isOriginalPackage() && pref.getBoolean("update_check", true)) {
+                if (pref.getBoolean("update_check", true)) {
                     if (!hasCheckedThisSession[0]) {
                         hasCheckedThisSession[0] = true;
                         XposedBridge.log("[WAE] Scheduling startup update check...");

@@ -50,6 +50,7 @@ public class WppCore {
     private static Method mGenJidMethod;
     private static Class bottomDialog;
     private static SharedPreferences privPrefs;
+    public static de.robv.android.xposed.XSharedPreferences waePrefs;
     private static Object mStartUpConfig;
     private static Object mActionUser;
     private static SQLiteDatabase mWaDatabase;
@@ -67,7 +68,8 @@ public class WppCore {
     private static Field meManagerPhoneJidField;
     private static Object meManagerInstance;
 
-    public static void Initialize(ClassLoader loader, XSharedPreferences pref) throws Exception {
+    public static void Initialize(ClassLoader loader, de.robv.android.xposed.XSharedPreferences pref) throws Exception {
+        waePrefs = pref;
         privPrefs = Utils.getApplication().getSharedPreferences("WaGlobal", Context.MODE_PRIVATE);
 
 

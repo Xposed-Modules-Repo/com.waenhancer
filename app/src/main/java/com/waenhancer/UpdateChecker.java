@@ -94,8 +94,8 @@ public class UpdateChecker implements Runnable {
                     .header("User-Agent", "WaEnhancer-UpdateChecker")
                     .build();
 
-            var appInfo = mActivity.getPackageManager().getPackageInfo(BuildConfig.APPLICATION_ID, 0);
-            String installedVersion = normalizeVersion(appInfo.versionName);
+            String installedVersion = normalizeVersion(com.waenhancer.BuildConfig.VERSION_NAME);
+            writeDebugLog("[UpdateChecker] run() - Installed Version: " + installedVersion);
             boolean installedIsBeta = isInstalledVersionBeta(installedVersion);
             String userChannel = getReleaseChannelPreference();
 
@@ -108,10 +108,11 @@ public class UpdateChecker implements Runnable {
             String selectedPublishedAt = null;
             String selectedDownloadUrl = null;
 
+            writeDebugLog("[UpdateChecker] Requesting: " + request.url());
             try (var response = getHttpClient().newCall(request).execute()) {
-                writeDebugLog("[UpdateChecker] Checking for updates... Installed: " + installedVersion + ", Channel: " + effectiveChannel);
+                writeDebugLog("[UpdateChecker] Checking... Installed: " + installedVersion + ", Channel: " + effectiveChannel);
                 if (!response.isSuccessful()) {
-                    writeDebugLog("[UpdateChecker] API call failed with code: " + response.code());
+                    writeDebugLog("[UpdateChecker] API call failed: " + response.code() + " " + response.message());
                     return;
                 }
 
@@ -175,6 +176,7 @@ public class UpdateChecker implements Runnable {
                 final String finalPublishedAt = selectedPublishedAt;
                 final String finalDownloadUrl = selectedDownloadUrl;
 
+                writeDebugLog("[UpdateChecker] Found update: " + finalVersion + " (" + finalTagName + ")");
                 if (mListener != null) {
                     mActivity.runOnUiThread(() -> mListener.onUpdateFound(finalVersion, finalTagName, finalChangelog, finalPublishedAt, finalDownloadUrl));
                 }
@@ -226,18 +228,11 @@ public class UpdateChecker implements Runnable {
             dialog.setTitle(releaseTypeBadge + " New Update Available!");
             dialog.setMessage(markwon.toMarkdown(message.toString()));
             dialog.setNegativeButton("Ignore", (dialog1, which) -> dialog1.dismiss());
-            dialog.setNeutralButton("View Changelog", (dialog1, which) -> {
-                android.content.Intent intent = new android.content.Intent(mActivity, com.waenhancer.activities.ChangelogActivity.class);
+            dialog.setPositiveButton("Update Now", (dialog1, which) -> {
+                android.content.Intent intent = new android.content.Intent();
+                intent.setComponent(new android.content.ComponentName("com.waenhancer", "com.waenhancer.activities.ChangelogActivity"));
+                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                 mActivity.startActivity(intent);
-                dialog1.dismiss();
-            });
-            dialog.setPositiveButton("Download", (dialog1, which) -> {
-                if (downloadUrl != null && !downloadUrl.isEmpty()) {
-                    // Start in-app download
-                    UpdateDownloader.showDownloadDialog(mActivity, downloadUrl, version);
-                } else {
-                    Utils.openLink(mActivity, TELEGRAM_UPDATE_URL);
-                }
                 dialog1.dismiss();
             });
             dialog.show();
@@ -321,13 +316,26 @@ public class UpdateChecker implements Runnable {
     }
 
     private String getReleaseChannelPreference() {
-        String channel = WppCore.getPrivString("release_channel", null);
-        if (channel == null) {
-            // Fallback to standard app preferences if WppCore is not initialized (e.g. running in Enhancer App)
-            android.content.SharedPreferences prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mActivity);
-            channel = prefs.getString("release_channel", "stable");
+        // First try to get it from WaEnhancer's XSharedPreferences (available in Xposed context)
+        if (com.waenhancer.xposed.core.WppCore.waePrefs != null) {
+            com.waenhancer.xposed.core.WppCore.waePrefs.reload();
+            String channel = com.waenhancer.xposed.core.WppCore.waePrefs.getString("release_channel", "stable");
+            writeDebugLog("[UpdateChecker] Channel from waePrefs: " + channel);
+            return channel;
         }
-        return "beta".equals(channel) ? "beta" : "stable";
+
+        // Fallback to WppCore's WaGlobal prefs (legacy/other contexts)
+        String channel = com.waenhancer.xposed.core.WppCore.getPrivString("release_channel", null);
+        if (channel != null) {
+             writeDebugLog("[UpdateChecker] Channel from getPrivString: " + channel);
+             return channel;
+        }
+
+        // Fallback to default prefs (running in Enhancer App context)
+        android.content.SharedPreferences prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mActivity);
+        String defaultChannel = prefs.getString("release_channel", "stable");
+        writeDebugLog("[UpdateChecker] Channel from default prefs: " + defaultChannel);
+        return defaultChannel;
     }
 
     private boolean isExactBetaTagFormat(String tagName) {

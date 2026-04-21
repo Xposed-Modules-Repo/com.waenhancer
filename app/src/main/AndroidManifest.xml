@@ -118,6 +118,7 @@
             android:name=".activities.ChangelogActivity"
             android:theme="@style/AppTheme"
             android:label="@string/changelog_title"
+            android:exported="true"
             android:parentActivityName=".activities.MainActivity" />
 
         <activity

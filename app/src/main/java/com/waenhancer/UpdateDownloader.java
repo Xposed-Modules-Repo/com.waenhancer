@@ -131,27 +131,55 @@ public class UpdateDownloader {
         Activity activity = getActivity(context);
         if (activity == null) return;
 
-        android.view.View dialogView = android.view.LayoutInflater.from(activity).inflate(R.layout.dialog_update_progress, null);
-        var progressBar = (com.google.android.material.progressindicator.LinearProgressIndicator) dialogView.findViewById(R.id.update_progress_bar);
-        var statusText = (com.google.android.material.textview.MaterialTextView) dialogView.findViewById(R.id.update_status_text);
+        // For Xposed: Need to get resources from WaEnhancer package if running in e.g. WhatsApp
+        Context modContext = activity;
+        boolean isXposed = !BuildConfig.APPLICATION_ID.equals(activity.getPackageName());
+        
+        if (isXposed) {
+            try {
+                modContext = activity.createPackageContext(BuildConfig.APPLICATION_ID, Context.CONTEXT_IGNORE_SECURITY);
+            } catch (Exception e) {
+                de.robv.android.xposed.XposedBridge.log("[WAE] Error creating package context: " + e.getMessage());
+            }
+        }
 
-        var dialog = new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+        // Dynamically get resource IDs for layout and views
+        int layoutId = isXposed ? modContext.getResources().getIdentifier("dialog_update_progress", "layout", BuildConfig.APPLICATION_ID) : R.layout.dialog_update_progress;
+        int progressBarId = isXposed ? modContext.getResources().getIdentifier("update_progress_bar", "id", BuildConfig.APPLICATION_ID) : R.id.update_progress_bar;
+        int statusTextId = isXposed ? modContext.getResources().getIdentifier("update_status_text", "id", BuildConfig.APPLICATION_ID) : R.id.update_status_text;
+
+        if (layoutId == 0) {
+            Toast.makeText(activity, "Error: Could not load update layout", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        android.view.View dialogView = android.view.LayoutInflater.from(modContext).inflate(layoutId, null);
+        var progressBar = (com.google.android.material.progressindicator.LinearProgressIndicator) dialogView.findViewById(progressBarId);
+        var statusText = (com.google.android.material.textview.MaterialTextView) dialogView.findViewById(statusTextId);
+
+        // Final references for inner class
+        final Call[] currentCall = {null};
+
+        var dialogBuilder = new com.waenhancer.xposed.core.components.AlertDialogWpp(activity)
                 .setTitle("Downloading Update")
                 .setView(dialogView)
-                .setCancelable(false)
-                .setNegativeButton("Cancel", null) // Set listener later
-                .create();
+                .setNegativeButton("Cancel", (d, w) -> {
+                    if (currentCall[0] != null) currentCall[0].cancel();
+                    d.dismiss();
+                });
 
+        var dialog = dialogBuilder.create();
+        dialog.setCanceledOnTouchOutside(false);
         dialog.show();
 
-        Call downloadCall = downloadApk(activity, url, version, new DownloadCallback() {
+        currentCall[0] = downloadApk(activity, url, version, new DownloadCallback() {
             @Override
             public void onProgress(int progress, long currentBytes, long totalBytes) {
                 activity.runOnUiThread(() -> {
-                    progressBar.setProgress(progress);
+                    if (progressBar != null) progressBar.setProgress(progress);
                     String sizeInfo = String.format(java.util.Locale.US, "%.1f MB / %.1f MB", 
                         currentBytes / (1024.0 * 1024.0), totalBytes / (1024.0 * 1024.0));
-                    statusText.setText(sizeInfo + " (" + progress + "%)");
+                    if (statusText != null) statusText.setText(sizeInfo + " (" + progress + "%)");
                 });
             }
 
@@ -170,11 +198,6 @@ public class UpdateDownloader {
                     Toast.makeText(activity, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
-        });
-
-        dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).setOnClickListener(v -> {
-            if (downloadCall != null) downloadCall.cancel();
-            dialog.dismiss();
         });
     }
 }
