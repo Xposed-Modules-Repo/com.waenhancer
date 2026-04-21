@@ -37,6 +37,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 public class ChangelogActivity extends BaseActivity {
+    public static final String EXTRA_TARGET_CHANNEL = "target_channel";
 
     private RecyclerView recyclerView;
     private ShimmerFrameLayout shimmerFrameLayout;
@@ -123,7 +124,11 @@ public class ChangelogActivity extends BaseActivity {
                         tabLayout.setVisibility(View.VISIBLE);
                         recyclerView.setVisibility(View.VISIBLE);
                         
-                        String userChannel = PreferenceManager.getDefaultSharedPreferences(this).getString("release_channel", "stable");
+                        String userChannel = getIntent().getStringExtra(EXTRA_TARGET_CHANNEL);
+                        if (userChannel == null) {
+                            userChannel = PreferenceManager.getDefaultSharedPreferences(this).getString("release_channel", "stable");
+                        }
+                        
                         int defaultTab = "beta".equals(userChannel) ? 1 : 0;
                         if (tabLayout.getTabAt(defaultTab) != null) {
                             tabLayout.getTabAt(defaultTab).select();

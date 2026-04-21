@@ -606,7 +606,9 @@ public class HomeFragment extends BaseFragment {
                 .setTitle(title)
                 .setMessage(message)
                 .setPositiveButton(R.string.download, (dialog, which) -> {
-                    openUrl(requireContext(), url);
+                    Intent intent = new Intent(requireContext(), ChangelogActivity.class);
+                    intent.putExtra(ChangelogActivity.EXTRA_TARGET_CHANNEL, selectedChannel);
+                    startActivity(intent);
                     dialog.dismiss();
                 })
                 .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())
@@ -637,7 +639,8 @@ public class HomeFragment extends BaseFragment {
     private boolean hasRecentModuleHeartbeat() {
         var prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
         long lastSeen = prefs.getLong(PREF_MODULE_HEARTBEAT, 0L);
-        return lastSeen > 0L && (System.currentTimeMillis() - lastSeen) < 6 * 60 * 60 * 1000L;
+        // Expiry threshold: 30 seconds (down from 6 hours) for better accuracy
+        return lastSeen > 0L && (System.currentTimeMillis() - lastSeen) < 30 * 1000L;
     }
 
     private void showClearCacheConfirmation() {

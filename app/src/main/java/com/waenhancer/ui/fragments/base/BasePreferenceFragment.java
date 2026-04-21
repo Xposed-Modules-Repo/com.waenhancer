@@ -577,7 +577,9 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
                 .setTitle(title)
                 .setMessage(message)
                 .setPositiveButton(R.string.download, (dialog, which) -> {
-                    Utils.openLink(requireActivity(), url);
+                    Intent intent = new Intent(requireContext(), com.waenhancer.activities.ChangelogActivity.class);
+                    intent.putExtra(com.waenhancer.activities.ChangelogActivity.EXTRA_TARGET_CHANNEL, selectedChannel);
+                    startActivity(intent);
                     dialog.dismiss();
                 })
                 .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())
