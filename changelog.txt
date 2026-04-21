@@ -5,5 +5,3 @@
 
 [Fixes]
 - Fixed update checker
-
-Note: This is stable release. Updates might be delayed based on the features stability. To get more recent updates install the beta (pre-release) version. Beta versions may have bugs.
