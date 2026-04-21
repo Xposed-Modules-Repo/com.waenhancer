@@ -22,11 +22,15 @@ jobs:
             CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
         steps:
             - name: Post release to Telegram channel
-              if: ${{ env.BOT_TOKEN != '' && env.CHANNEL_ID != '' }}
+              if: ${{ env.BOT_TOKEN != '' && env.CHANNEL_ID != '' && !github.event.release.prerelease }}
               run: |
                 BODY="${{ github.event.release.body || inputs.release_body }}"
                 URL="${{ github.event.release.html_url || inputs.release_url }}"
-                MESSAGE="$(printf '%s\n\nRelease: %s' "$(printf '%s' "$BODY" | sed '/./,$!d')" "$URL")"
+                TAG="${{ github.event.release.tag_name || 'Manual' }}"
+                
+                # Truncate body to avoid Telegram's 4096 character limit
+                CLEAN_BODY=$(printf '%s' "$BODY" | sed '/./,$!d' | cut -c 1-4000)
+                MESSAGE="$(printf 'STABLE %s\n\n%s\n\nRelease: %s' "$TAG" "$CLEAN_BODY" "$URL")"
 
                 curl -f -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
                   -d "chat_id=${{ secrets.CHANNEL_ID }}" \
