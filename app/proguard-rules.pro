@@ -19,24 +19,38 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# General Stability for R8
+-keepattributes *Annotation*,Signature,InnerClasses,SourceFile,LineNumberTable
+
 -dontwarn *
 
+# Keep our entire module code
 -keep class com.waenhancer.** {
      *;
 }
 
--keep class cz.vutbr.** {
-     *;
-}
+# Keep AndroidX libraries that are often accessed via reflection in Xposed environments
+-keep class androidx.preference.** { *; }
+-keep class androidx.fragment.** { *; }
+-keep class androidx.appcompat.** { *; }
+-keep class com.google.android.material.** { *; }
 
--keep class com.assemblyai.api.** {
-     *;
-}
+# Keep DexKit and other local libraries
+-keep class io.luckypray.dexkit.** { *; }
+-keep class org.luckypray.dexkit.** { *; }
+-keep class com.waenhancer.xposed.utils.ResId** { *; }
 
--keep class org.luckypray.** {
-     *;
-}
+# Support for Xposed libraries
+-keep class de.robv.android.xposed.** { *; }
+-dontwarn de.robv.android.xposed.**
+-keep class io.github.libxposed.** { *; }
 
--keep class io.luckypray.** {
-     *;
-}
+# Bouncy Castle
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+
+# OkHttp/Okio
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
