@@ -103,8 +103,10 @@ jobs:
             RELEASE_PRERELEASE="false"
 
             BASE_VERSION="$VERSION_NAME"
+            WAS_BETA="false"
             if [[ "$BASE_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta-[0-9]+$ ]]; then
               BASE_VERSION="${BASH_REMATCH[1]}"
+              WAS_BETA="true"
             fi
 
             if [[ ! "$BASE_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
@@ -112,26 +114,30 @@ jobs:
               exit 1
             fi
 
-            MAJOR="${BASH_REMATCH[1]}"
-            MINOR="${BASH_REMATCH[2]}"
-            PATCH="${BASH_REMATCH[3]}"
+            if [ "$WAS_BETA" == "true" ]; then
+              NEW_VERSION_NAME="$BASE_VERSION"
+            else
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
 
-            if [ "$PATCH" -eq 9 ]; then
-              NEW_PATCH=0
-              NEW_MINOR=$((MINOR + 1))
-              if [ "$NEW_MINOR" -ge 10 ]; then
-                NEW_MINOR=0
-                NEW_MAJOR=$((MAJOR + 1))
+              if [ "$PATCH" -eq 9 ]; then
+                NEW_PATCH=0
+                NEW_MINOR=$((MINOR + 1))
+                if [ "$NEW_MINOR" -ge 10 ]; then
+                  NEW_MINOR=0
+                  NEW_MAJOR=$((MAJOR + 1))
+                else
+                  NEW_MAJOR="$MAJOR"
+                fi
               else
+                NEW_PATCH=$((PATCH + 1))
+                NEW_MINOR="$MINOR"
                 NEW_MAJOR="$MAJOR"
               fi
-            else
-              NEW_PATCH=$((PATCH + 1))
-              NEW_MINOR="$MINOR"
-              NEW_MAJOR="$MAJOR"
-            fi
 
-            NEW_VERSION_NAME="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
+              NEW_VERSION_NAME="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
+            fi
             RELEASE_TYPE="STABLE"
           fi
 
