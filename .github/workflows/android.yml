@@ -72,8 +72,27 @@ jobs:
               BETA_NUM="${BASH_REMATCH[2]}"
               NEW_BETA_NUM=$((BETA_NUM + 1))
               NEW_VERSION_NAME="${BASE_VERSION}-beta-${NEW_BETA_NUM}"
-            elif [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              NEW_VERSION_NAME="${VERSION_NAME}-beta-1"
+            elif [[ "$VERSION_NAME" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+
+              if [ "$PATCH" -eq 9 ]; then
+                NEW_PATCH=0
+                NEW_MINOR=$((MINOR + 1))
+                if [ "$NEW_MINOR" -ge 10 ]; then
+                  NEW_MINOR=0
+                  NEW_MAJOR=$((MAJOR + 1))
+                else
+                  NEW_MAJOR="$MAJOR"
+                fi
+              else
+                NEW_PATCH=$((PATCH + 1))
+                NEW_MINOR="$MINOR"
+                NEW_MAJOR="$MAJOR"
+              fi
+
+              NEW_VERSION_NAME="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}-beta-1"
             else
               echo "Unsupported VERSION_NAME format for beta branch: $VERSION_NAME"
               exit 1
@@ -96,15 +115,31 @@ jobs:
             MAJOR="${BASH_REMATCH[1]}"
             MINOR="${BASH_REMATCH[2]}"
             PATCH="${BASH_REMATCH[3]}"
-            NEW_PATCH=$((PATCH + 1))
-            NEW_VERSION_NAME="${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+            if [ "$PATCH" -eq 9 ]; then
+              NEW_PATCH=0
+              NEW_MINOR=$((MINOR + 1))
+              if [ "$NEW_MINOR" -ge 10 ]; then
+                NEW_MINOR=0
+                NEW_MAJOR=$((MAJOR + 1))
+              else
+                NEW_MAJOR="$MAJOR"
+              fi
+            else
+              NEW_PATCH=$((PATCH + 1))
+              NEW_MINOR="$MINOR"
+              NEW_MAJOR="$MAJOR"
+            fi
+
+            NEW_VERSION_NAME="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
             RELEASE_TYPE="STABLE"
           fi
 
           if [[ "$NEW_VERSION_NAME" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-beta-([0-9]+)$ ]]; then
-            NEW_VERSION_CODE="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+            BETA_TAIL=$(printf "%02d" "${BASH_REMATCH[4]}")
+            NEW_VERSION_CODE="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BETA_TAIL}"
           elif [[ "$NEW_VERSION_NAME" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            NEW_VERSION_CODE="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+            NEW_VERSION_CODE="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}99"
           fi
 
           sed -i "s/^VERSION_CODE=.*/VERSION_CODE=${NEW_VERSION_CODE}/" gradle.properties
