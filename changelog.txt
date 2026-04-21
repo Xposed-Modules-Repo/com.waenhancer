@@ -1,5 +1,3 @@
-## Introducing Update Channel Selection
-
 [Added]
 - Implemented In-App Update
 
