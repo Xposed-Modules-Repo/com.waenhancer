@@ -29,6 +29,7 @@ public class UpdateChecker implements Runnable {
     private static final String RELEASE_TAG_PREFIX = "debug-";
     private static final String TELEGRAM_UPDATE_URL = "https://github.com/mubashardev/WaEnhancer/releases";
     private static final Pattern BETA_TAG_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+-beta-\\d+$");
+    private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-beta-\\d+)?$");
 
     private static OkHttpClient httpClient;
 
@@ -122,6 +123,7 @@ public class UpdateChecker implements Runnable {
                     }
 
                     if (parsedVersion.isEmpty()) continue;
+                    if (!VERSION_PATTERN.matcher(parsedVersion).matches()) continue;
                     if (!shouldShowReleaseType(parsedVersion, effectiveChannel)) continue;
                     if (installedIsBeta && !"beta".equals(effectiveChannel)) continue;
                     if (installedIsBeta && !isExactBetaTagFormat(parsedVersion)) continue;

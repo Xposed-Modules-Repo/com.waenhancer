@@ -79,7 +79,6 @@ jobs:
               exit 1
             fi
 
-            NEW_VERSION_CODE="$VERSION_CODE"
             RELEASE_TYPE="BETA"
           else
             RELEASE_PRERELEASE="false"
@@ -99,8 +98,13 @@ jobs:
             PATCH="${BASH_REMATCH[3]}"
             NEW_PATCH=$((PATCH + 1))
             NEW_VERSION_NAME="${MAJOR}.${MINOR}.${NEW_PATCH}"
-            NEW_VERSION_CODE=$((VERSION_CODE + 1))
             RELEASE_TYPE="STABLE"
+          fi
+
+          if [[ "$NEW_VERSION_NAME" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-beta-([0-9]+)$ ]]; then
+            NEW_VERSION_CODE="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+          elif [[ "$NEW_VERSION_NAME" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            NEW_VERSION_CODE="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
           fi
 
           sed -i "s/^VERSION_CODE=.*/VERSION_CODE=${NEW_VERSION_CODE}/" gradle.properties
@@ -121,19 +125,19 @@ jobs:
         run: |
           if [ -n "${{ secrets.KEY_STORE }}" ]; then
             echo "${{ secrets.KEY_STORE }}" | base64 --decode > release.jks
-            ./gradlew assembleWhatsappDebug -Pminify=true \
+            ./gradlew assembleWhatsappRelease -Pminify=true \
               -PandroidStoreFile=release.jks \
               -PandroidStorePassword='${{ secrets.KEY_STORE_PASSWORD }}' \
               -PandroidKeyAlias='${{ secrets.ALIAS }}' \
               -PandroidKeyPassword='${{ secrets.KEY_PASSWORD }}'
           else
-            ./gradlew assembleWhatsappDebug -Pminify=true
+            ./gradlew assembleWhatsappRelease -Pminify=true
           fi
 
       - name: Rename APK to versioned name
         run: |
           mkdir -p release_artifacts
-          cp app/build/outputs/apk/whatsapp/debug/app-whatsapp-debug.apk "release_artifacts/WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk"
+          cp app/build/outputs/apk/whatsapp/release/app-whatsapp-release.apk "release_artifacts/WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk"
 
       - name: Upload WhatsApp flavor artifact
         uses: actions/upload-artifact@v5
@@ -153,24 +157,3 @@ jobs:
           tag_name: ${{ env.NEW_VERSION_NAME }}
           prerelease: ${{ env.RELEASE_PRERELEASE }}
 
-      - name: Read changelog
-        id: changelog
-        run: |
-          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64 | tr -dc 'a-zA-Z0-9')
-          echo "body<<$EOF" >> "$GITHUB_OUTPUT"
-          sed '/./,$!d' changelog.txt >> "$GITHUB_OUTPUT"
-          echo "" >> "$GITHUB_OUTPUT"
-          echo "$EOF" >> "$GITHUB_OUTPUT"
-
-      - name: Post release to Telegram channel
-        if: ${{ env.BOT_TOKEN != '' && env.CHANNEL_ID != '' && env.RELEASE_TYPE == 'STABLE' }}
-        env:
-          CHANGELOG_BODY: ${{ steps.changelog.outputs.body }}
-          RELEASE_URL: ${{ steps.release.outputs.url }}
-        run: |
-          FULL_MESSAGE="$(printf '%s %s\n\n%s\n\nRelease: %s' "${{ env.RELEASE_TYPE }}" "${{ env.NEW_VERSION_NAME }}" "$CHANGELOG_BODY" "$RELEASE_URL")"
-
-          curl -f -X POST "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.CHANNEL_ID }}" \
-            --data-urlencode "text=$FULL_MESSAGE" \
-            -d "disable_web_page_preview=true"
