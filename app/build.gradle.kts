@@ -106,7 +106,8 @@ android {
             // Local testing: pair with `adb reverse tcp:3000 tcp:3000`
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
