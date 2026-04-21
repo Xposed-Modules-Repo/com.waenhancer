@@ -367,6 +367,8 @@ public class FeatureLoader {
                     context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName);
             wppIntent.putExtra("PKG", context.getPackageName());
             wppIntent.setPackage(BuildConfig.APPLICATION_ID);
+            // Ensure broadcast reaches the module even if it is in stopped/background state (Android 14+)
+            wppIntent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
             context.sendBroadcast(wppIntent);
         } catch (Exception ignored) {
         }

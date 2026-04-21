@@ -418,7 +418,7 @@ public class HomeFragment extends BaseFragment {
 
     @SuppressLint("StringFormatInvalid")
     private void checkStateWpp(FragmentActivity activity) {
-        boolean enabled = MainActivity.isXposedEnabled();
+        boolean enabled = MainActivity.isXposedEnabled() || hasRecentModuleHeartbeat();
         setModuleActiveState(enabled);
         if (isInstalled(FeatureLoader.PACKAGE_WPP) && App.isOriginalPackage()) {
             disableWpp(activity);
@@ -432,6 +432,9 @@ public class HomeFragment extends BaseFragment {
             binding.status3.setVisibility(View.GONE);
         }
         checkWpp(activity);
+
+        // Retry after a delay to catch the roundtrip broadcast from WhatsApp
+        binding.getRoot().postDelayed(() -> checkWpp(activity), 3000);
         binding.deviceName.setText(Build.MANUFACTURER);
         binding.sdk.setText(String.valueOf(Build.VERSION.SDK_INT));
         binding.modelName.setText(Build.DEVICE);
@@ -535,6 +538,8 @@ public class HomeFragment extends BaseFragment {
 
     private static void checkWpp(FragmentActivity activity) {
         Intent checkWpp = new Intent(BuildConfig.APPLICATION_ID + ".CHECK_WPP");
+        // Ensure broadcast reaches WhatsApp even if it is in background/stopped state (Android 14+)
+        checkWpp.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
         activity.sendBroadcast(checkWpp);
     }
 

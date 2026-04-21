@@ -51,7 +51,7 @@ public final class NoticeCenter {
     private static final String KEY_CACHE_FETCHED_AT = "cache_fetched_at";
 
     private static final long MIN_FETCH_INTERVAL_MS = TimeUnit.MINUTES.toMillis(5);
-    private static final long SHOW_INTERVAL_MS = TimeUnit.HOURS.toMillis(1);
+    private static final long SHOW_INTERVAL_MS = TimeUnit.DAYS.toMillis(1);
 
     private static final String KEY_LAST_SHOWN_AT = "last_shown_at";
     private static final String KEY_LAST_SHOWN_SIG = "last_shown_sig";
