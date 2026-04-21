@@ -88,49 +88,6 @@
 
     <PreferenceCategory
         app:iconSpaceReserved="false"
-        app:title="@string/call_recording_title">
-
-        <rikka.material.preference.MaterialSwitchPreference
-            app:key="call_recording_enable"
-            app:summary="@string/call_recording_enable_sum"
-            app:title="@string/call_recording_enable" />
-
-        <com.waenhancer.preference.FileSelectPreference
-            android:defaultValue="/sdcard/Music/WaEnhancer/Recordings"
-            app:dependency="call_recording_enable"
-            app:directory="true"
-            app:key="call_recording_path"
-            app:title="@string/call_recording_path" />
-
-        <Preference
-            app:dependency="call_recording_enable"
-            app:key="call_recording_settings"
-            app:title="@string/call_recording_settings"
-            app:summary="Configure Audio Source and Root options" />
-
-        <com.waenhancer.preference.ContactPickerPreference
-            android:key="call_recording_blacklist"
-            android:dependency="call_recording_enable"
-            android:title="@string/recording_excluded_contacts"
-            app:summaryOff="@string/no_contacts_selected"
-            app:summaryOn="@string/contact_were_selected" />
-
-        <com.waenhancer.preference.ContactPickerPreference
-            android:key="call_recording_whitelist"
-            android:dependency="call_recording_enable"
-            android:title="@string/recording_included_contacts"
-            app:summaryOff="@string/no_contacts_selected"
-            app:summaryOn="@string/contact_were_selected" />
-
-        <rikka.material.preference.MaterialSwitchPreference
-            android:enabled="false"
-            app:key="video_call_screen_rec"
-            app:summary="@string/video_call_screen_rec_locked"
-            app:title="@string/video_call_screen_rec" />
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        app:iconSpaceReserved="false"
         app:title="@string/title_audio">
 
         <rikka.material.preference.MaterialSwitchPreference
