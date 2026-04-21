@@ -39,6 +39,8 @@ jobs:
       CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -64,19 +66,45 @@ jobs:
           VERSION_CODE="$(grep '^VERSION_CODE=' gradle.properties | cut -d'=' -f2 | tr -d '\r\n')"
           VERSION_NAME="$(grep '^VERSION_NAME=' gradle.properties | cut -d'=' -f2 | tr -d '\r\n')"
 
+          if [[ "$VERSION_NAME" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-beta-([0-9]+))?$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            BETA_NUM="${BASH_REMATCH[5]}"
+            BASE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          else
+            echo "Unsupported VERSION_NAME format: $VERSION_NAME"
+            exit 1
+          fi
+
           if [[ "$BRANCH" == "beta" ]]; then
             RELEASE_PRERELEASE="true"
+            RELEASE_TYPE="BETA"
 
-            if [[ "$VERSION_NAME" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta-([0-9]+)$ ]]; then
-              BASE_VERSION="${BASH_REMATCH[1]}"
-              BETA_NUM="${BASH_REMATCH[2]}"
+            # Check if this base version is already released as stable
+            if git rev-parse "$BASE_VERSION" >/dev/null 2>&1; then
+              # Already released! Move to next version beta-1
+              if [ "$PATCH" -eq 9 ]; then
+                NEW_PATCH=0
+                NEW_MINOR=$((MINOR + 1))
+                if [ "$NEW_MINOR" -ge 10 ]; then
+                  NEW_MINOR=0
+                  NEW_MAJOR=$((MAJOR + 1))
+                else
+                  NEW_MAJOR="$MAJOR"
+                fi
+              else
+                NEW_PATCH=$((PATCH + 1))
+                NEW_MINOR="$MINOR"
+                NEW_MAJOR="$MAJOR"
+              fi
+              NEW_VERSION_NAME="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}-beta-1"
+            elif [ -n "$BETA_NUM" ]; then
+              # Not released, just increment beta
               NEW_BETA_NUM=$((BETA_NUM + 1))
               NEW_VERSION_NAME="${BASE_VERSION}-beta-${NEW_BETA_NUM}"
-            elif [[ "$VERSION_NAME" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              PATCH="${BASH_REMATCH[3]}"
-
+            else
+              # Stable format in beta branch but not tagged. Start next version beta.
               if [ "$PATCH" -eq 9 ]; then
                 NEW_PATCH=0
                 NEW_MINOR=$((MINOR + 1))
@@ -91,36 +119,18 @@ jobs:
                 NEW_MINOR="$MINOR"
                 NEW_MAJOR="$MAJOR"
               fi
-
               NEW_VERSION_NAME="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}-beta-1"
-            else
-              echo "Unsupported VERSION_NAME format for beta branch: $VERSION_NAME"
-              exit 1
             fi
-
-            RELEASE_TYPE="BETA"
           else
+            # master branch logic
             RELEASE_PRERELEASE="false"
+            RELEASE_TYPE="STABLE"
 
-            BASE_VERSION="$VERSION_NAME"
-            WAS_BETA="false"
-            if [[ "$BASE_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta-[0-9]+$ ]]; then
-              BASE_VERSION="${BASH_REMATCH[1]}"
-              WAS_BETA="true"
-            fi
-
-            if [[ ! "$BASE_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              echo "Unsupported VERSION_NAME format for master branch: $VERSION_NAME"
-              exit 1
-            fi
-
-            if [ "$WAS_BETA" == "true" ]; then
+            if [ -n "$BETA_NUM" ]; then
+              # If it was a beta, the stable version is just the base version
               NEW_VERSION_NAME="$BASE_VERSION"
             else
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              PATCH="${BASH_REMATCH[3]}"
-
+              # If it was already stable, increment to next stable
               if [ "$PATCH" -eq 9 ]; then
                 NEW_PATCH=0
                 NEW_MINOR=$((MINOR + 1))
@@ -135,10 +145,8 @@ jobs:
                 NEW_MINOR="$MINOR"
                 NEW_MAJOR="$MAJOR"
               fi
-
               NEW_VERSION_NAME="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
             fi
-            RELEASE_TYPE="STABLE"
           fi
 
           if [[ "$NEW_VERSION_NAME" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-beta-([0-9]+)$ ]]; then
