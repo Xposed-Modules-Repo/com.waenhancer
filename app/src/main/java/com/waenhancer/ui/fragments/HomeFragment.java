@@ -418,7 +418,7 @@ public class HomeFragment extends BaseFragment {
 
     @SuppressLint("StringFormatInvalid")
     private void checkStateWpp(FragmentActivity activity) {
-        boolean enabled = MainActivity.isXposedEnabled() || hasRecentModuleHeartbeat();
+        boolean enabled = MainActivity.isXposedEnabled();
         setModuleActiveState(enabled);
         if (isInstalled(FeatureLoader.PACKAGE_WPP) && App.isOriginalPackage()) {
             disableWpp(activity);
