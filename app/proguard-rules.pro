@@ -21,16 +21,22 @@
 #-renamesourcefileattribute SourceFile
 -dontwarn *
 
--keepclasseswithmembers class com.waenhancer.** {
+-keep class com.waenhancer.** {
      *;
 }
 
--keepclasseswithmembernames class com.waenhancer.**
-
--keepclasseswithmembers class cz.vutbr.** {
+-keep class cz.vutbr.** {
      *;
 }
 
--keepclasseswithmembers class com.assemblyai.api.** {
+-keep class com.assemblyai.api.** {
+     *;
+}
+
+-keep class org.luckypray.** {
+     *;
+}
+
+-keep class io.luckypray.** {
      *;
 }
