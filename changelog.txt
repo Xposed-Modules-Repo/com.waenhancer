@@ -1,9 +1,3 @@
-## Introducing Update Channel Selection
-
-[Added]
-- Implemented In-App Update
-
-[Fixes]
-- Fixed update checker
-- Fixed crash on startup
-- Fixed hooks initialization
+[Improved]
+- Improved changelog activity
+- The user can now directly switch/install either beta or release channel from the app.
