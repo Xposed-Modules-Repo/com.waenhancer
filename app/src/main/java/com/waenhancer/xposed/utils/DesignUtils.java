@@ -193,11 +193,25 @@ public class DesignUtils {
     }
 
     public static boolean isNightMode() {
+        return isNightMode(Utils.getApplication());
+    }
+
+    public static boolean isNightMode(android.content.Context context) {
+        if (context == null) return Utils.getDefaultTheme() <= 0 ? isNightModeBySystem() : Utils.getDefaultTheme() == 2;
+        
+        // Check context configuration first (most accurate for the current activity)
+        int uiMode = context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+        if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) return true;
+        if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_NO) return false;
+
+        // Fallback to WhatsApp preferences
         return Utils.getDefaultTheme() <= 0 ? isNightModeBySystem() : Utils.getDefaultTheme() == 2;
     }
 
     public static boolean isNightModeBySystem() {
-        return (Utils.getApplication().getResources().getConfiguration().uiMode & 48) == 32;
+        android.content.Context context = Utils.getApplication();
+        if (context == null) return false;
+        return (context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
     }
 
     public static void setPrefs(SharedPreferences mPrefs) {

@@ -301,4 +301,15 @@
         <item>beta</item>
     </string-array>
 
+    <string-array name="wa_enhancer_entry_point_entries">
+        <item>@string/entry_point_home_menu</item>
+        <item>@string/entry_point_wa_settings</item>
+        <item>@string/entry_point_none</item>
+    </string-array>
+    <string-array name="wa_enhancer_entry_point_values">
+        <item>1</item>
+        <item>2</item>
+        <item>0</item>
+    </string-array>
+
 </resources>

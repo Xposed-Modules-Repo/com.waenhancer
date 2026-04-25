@@ -57,8 +57,8 @@ public class MenuHome extends Feature {
     }
 
     private void InsertOpenWae(Menu menu, Activity activity) {
-        var waeMenu = prefs.getBoolean("open_wae", true);
-        if (!waeMenu) return;
+        var entryPoint = getSafeString("open_wae", "1");
+        if (!"1".equals(entryPoint)) return;
         var itemMenu = menu.add(0, 0, 9999, " " + activity.getString(ResId.string.app_name));
         var iconDraw = DesignUtils.getDrawableByName("ic_settings");
         iconDraw.setTint(0xff8696a0);

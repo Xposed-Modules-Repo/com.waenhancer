@@ -36,11 +36,31 @@ public final class SettingsViewBuilder {
     }
 
     public static Host buildHost(Context context) {
-        boolean isDark = DesignUtils.isNightMode();
+        boolean isDark = DesignUtils.isNightMode(context);
         int colorPrimary = getHostColor(context, "colorPrimary",
-                isDark ? 0xff1f2c34 : 0xff008069);
+                isDark ? 0xff00a884 : 0xff008069);
         int windowBg = getHostColor(context, "windowBackground",
                 isDark ? 0xff121b22 : 0xffffffff);
+
+        // Try to resolve from theme attributes directly
+        try {
+            android.util.TypedValue tv = new android.util.TypedValue();
+            android.content.res.Resources.Theme theme = context.getTheme();
+            
+            // Resolve primary
+            int primaryAttr = context.getResources().getIdentifier("colorPrimary", "attr", context.getPackageName());
+            if (primaryAttr != 0 && theme.resolveAttribute(primaryAttr, tv, true)) {
+                colorPrimary = tv.data;
+            }
+            
+            // Resolve background
+            int bgAttr = android.R.attr.windowBackground;
+            if (theme.resolveAttribute(bgAttr, tv, true)) {
+                if (tv.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && tv.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
+                    windowBg = tv.data;
+                }
+            }
+        } catch (Throwable ignored) {}
         int toolbarTextColor = getHostColor(context, "toolbar_primary_text_color", 0xffffffff);
         int actionBarHeight = getHostDimen(context, "action_bar_size", 56);
 

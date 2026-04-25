@@ -52,4 +52,17 @@ public abstract class Feature {
             XposedBridge.log(String.format("[%s] %s", this.getPluginName(), object));
         }
     }
+
+    protected String getSafeString(String key, String defaultValue) {
+        try {
+            return prefs.getString(key, defaultValue);
+        } catch (ClassCastException e) {
+            // Handle migration from Boolean (previous versions used switches for some keys like "open_wae")
+            try {
+                return prefs.getBoolean(key, true) ? "1" : "0";
+            } catch (ClassCastException e2) {
+                return defaultValue;
+            }
+        }
+    }
 }

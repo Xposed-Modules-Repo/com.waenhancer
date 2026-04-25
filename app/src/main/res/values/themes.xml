@@ -18,6 +18,8 @@
         <item name="android:textAppearanceListItemSmall">?textAppearanceBodySmall</item>
         <item name="preferenceTheme">@style/Preference.Rikka.Material3</item>
         <item name="materialSwitchPreferenceStyle">@style/Preference.Rikka.MateriaSwitchPreference</item>
+        <item name="colorPrimary">@color/whatsapp_teal</item>
+        <item name="colorSecondary">@color/whatsapp_teal</item>
         <item name="android:fontFamily">@font/outfit</item>
         <item name="fontFamily">@font/outfit</item>
     </style>
@@ -39,6 +41,8 @@
         <item name="android:textAppearanceListItemSmall">?textAppearanceBodySmall</item>
         <item name="preferenceTheme">@style/Preference.Rikka.Material3</item>
         <item name="materialSwitchPreferenceStyle">@style/Preference.Rikka.MateriaSwitchPreference</item>
+        <item name="colorPrimary">@color/whatsapp_green</item>
+        <item name="colorSecondary">@color/whatsapp_green</item>
         <item name="android:fontFamily">@font/outfit</item>
         <item name="fontFamily">@font/outfit</item>
     </style>

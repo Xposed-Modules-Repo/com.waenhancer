@@ -32,6 +32,9 @@ public class SettingsInjector extends Feature {
 
     @Override
     public void doHook() throws Throwable {
+        var entryPoint = getSafeString("open_wae", "1");
+        if (!"2".equals(entryPoint)) return;
+
         // Hook RecyclerView attachment to inject tile into WA's Settings list
         XposedHelpers.findAndHookMethod(android.view.View.class, "onAttachedToWindow", new XC_MethodHook() {
             @Override
@@ -126,17 +129,27 @@ public class SettingsInjector extends Feature {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        row.setPadding(Utils.dipToPixels(16), Utils.dipToPixels(16),
-                Utils.dipToPixels(16), Utils.dipToPixels(16));
+        row.setPadding(Utils.dipToPixels(16), Utils.dipToPixels(12),
+                Utils.dipToPixels(16), Utils.dipToPixels(12));
         row.setClickable(true);
         row.setFocusable(true);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
         row.setBackground(DesignUtils.getSelectableItemBackground(activity));
+
+        android.widget.ImageView icon = new android.widget.ImageView(activity);
+        var iconDraw = DesignUtils.getDrawableByName("ic_settings");
+        iconDraw.setTint(0xff8696a0);
+        icon.setImageDrawable(iconDraw);
+        var iconParams = new LinearLayout.LayoutParams(Utils.dipToPixels(24), Utils.dipToPixels(24));
+        iconParams.rightMargin = Utils.dipToPixels(32);
+        icon.setLayoutParams(iconParams);
 
         TextView textView = new TextView(activity);
         textView.setText("WaEnhancer Settings");
         textView.setTextSize(16);
         textView.setTextColor(DesignUtils.getPrimaryTextColor());
 
+        row.addView(icon);
         row.addView(textView);
         row.setOnClickListener(v -> MenuHome.showWaeSettingsDialog(activity));
 
