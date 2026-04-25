@@ -457,7 +457,17 @@ public class Utils {
     }
 
     public static int getDefaultTheme() {
-        var startup_prefs = getApplication().getSharedPreferences("startup_prefs", android.content.Context.MODE_PRIVATE);
-        return startup_prefs.getInt("night_mode", 0);
+        android.content.Context context = getApplication();
+        var startup_prefs = context.getSharedPreferences("startup_prefs", android.content.Context.MODE_PRIVATE);
+        int mode = startup_prefs.getInt("night_mode", 0);
+        if (mode != 0) return mode;
+
+        // Try com.whatsapp_preferences
+        var wa_prefs = context.getSharedPreferences(context.getPackageName() + "_preferences", android.content.Context.MODE_PRIVATE);
+        String theme = wa_prefs.getString("theme", "system");
+        if ("dark".equals(theme)) return 2;
+        if ("light".equals(theme)) return 1;
+
+        return 0;
     }
 }

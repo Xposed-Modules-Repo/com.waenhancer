@@ -40,7 +40,7 @@ public final class SettingsViewBuilder {
         int colorPrimary = getHostColor(context, "colorPrimary",
                 isDark ? 0xff1f2c34 : 0xff008069);
         int windowBg = getHostColor(context, "windowBackground",
-                isDark ? 0xff0b141a : 0xffffffff);
+                isDark ? 0xff121b22 : 0xffffffff);
         int toolbarTextColor = getHostColor(context, "toolbar_primary_text_color", 0xffffffff);
         int actionBarHeight = getHostDimen(context, "action_bar_size", 56);
 

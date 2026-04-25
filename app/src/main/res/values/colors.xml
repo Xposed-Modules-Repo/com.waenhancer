@@ -22,10 +22,10 @@
     <color name="primary_background">@color/background_light</color>
     <color name="codeview_strings">#10B981</color>
 
-    <color name="md_theme_light_primary">#0055FF</color> <!-- Electric European Blue -->
+    <color name="md_theme_light_primary">#008069</color> <!-- WhatsApp Teal -->
     <color name="md_theme_light_onPrimary">#FFFFFF</color>
-    <color name="md_theme_light_primaryContainer">#E0E8FF</color>
-    <color name="md_theme_light_onPrimaryContainer">#001855</color>
+    <color name="md_theme_light_primaryContainer">#E1F3EF</color>
+    <color name="md_theme_light_onPrimaryContainer">#002119</color>
     
     <color name="md_theme_light_secondary">#4A4A4A</color>
     <color name="md_theme_light_onSecondary">#FFFFFF</color>
@@ -47,10 +47,10 @@
     <color name="md_theme_light_outline">#E0E0E0</color> <!-- Subtle outline -->
     <color name="md_theme_light_outlineVariant">#EAEAEA</color>
 
-    <color name="md_theme_dark_primary">#3377FF</color> <!-- Slightly lighter blue for dark mode -->
-    <color name="md_theme_dark_onPrimary">#FFFFFF</color>
-    <color name="md_theme_dark_primaryContainer">#003399</color>
-    <color name="md_theme_dark_onPrimaryContainer">#DDE8FF</color>
+    <color name="md_theme_dark_primary">#00A884</color> <!-- WhatsApp Dark Teal -->
+    <color name="md_theme_dark_onPrimary">#00372D</color>
+    <color name="md_theme_dark_primaryContainer">#005140</color>
+    <color name="md_theme_dark_onPrimaryContainer">#36FFCD</color>
     
     <color name="md_theme_dark_secondary">#B0B0B0</color>
     <color name="md_theme_dark_onSecondary">#000000</color>

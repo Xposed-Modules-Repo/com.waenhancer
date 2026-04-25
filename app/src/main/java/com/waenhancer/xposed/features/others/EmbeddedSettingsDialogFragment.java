@@ -42,10 +42,15 @@ public class EmbeddedSettingsDialogFragment extends DialogFragment {
         android.content.Context context = super.getContext();
         if (context == null) return null;
         int themeRes = DesignUtils.isNightMode() ? com.waenhancer.xposed.utils.ResId.style.Theme : com.waenhancer.xposed.utils.ResId.style.Theme_Light;
-        if (themeRes != 0) {
-            return new android.view.ContextThemeWrapper(context, themeRes);
-        }
-        return context;
+        return new android.view.ContextThemeWrapper(context, themeRes) {
+            @Override
+            public android.content.res.Resources getResources() {
+                if (com.waenhancer.xposed.utils.XResManager.moduleResources != null) {
+                    return com.waenhancer.xposed.utils.XResManager.moduleResources;
+                }
+                return super.getResources();
+            }
+        };
     }
 
     @Nullable
@@ -131,6 +136,6 @@ public class EmbeddedSettingsDialogFragment extends DialogFragment {
             }
         } catch (Throwable ignored) {
         }
-        return DesignUtils.isNightMode() ? 0xff0b141a : 0xff00695c;
+        return DesignUtils.isNightMode() ? 0xff121b22 : 0xff00695c;
     }
 }

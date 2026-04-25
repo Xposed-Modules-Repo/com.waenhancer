@@ -86,6 +86,24 @@ public class WppXposed implements IXposedHookLoadPackage, IXposedHookInitPackage
         XResManager.moduleResources = XModuleResources.createInstance(MODULE_PATH, resparam.res);
         ResParam = resparam;
 
+        // Spy on WhatsApp colors
+        try {
+            Class<?> rColor = XposedHelpers.findClassIfExists(packageName + ".R$color", null);
+            if (rColor != null) {
+                XposedBridge.log("--- WhatsApp Colors Spy [" + packageName + "] ---");
+                for (var field : rColor.getDeclaredFields()) {
+                    try {
+                        int id = field.getInt(null);
+                        int color = resparam.res.getColor(id);
+                        XposedBridge.log("WA_COLOR: " + field.getName() + " = #" + Integer.toHexString(color));
+                    } catch (Throwable ignored) {}
+                }
+                XposedBridge.log("--- End WhatsApp Colors Spy ---");
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("Failed to spy on colors: " + t.getMessage());
+        }
+
         for (var field : ResId.string.class.getFields()) {
             var field1 = R.string.class.getField(field.getName());
             field.set(null, resparam.res.addResource(XResManager.moduleResources, field1.getInt(null)));

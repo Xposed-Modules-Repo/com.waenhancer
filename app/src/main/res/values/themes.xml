@@ -1,6 +1,6 @@
 <resources>
 
-    <style name="Base.AppTheme.Light" parent="Theme.Material3.DynamicColors.Light.Rikka">
+    <style name="Base.AppTheme.Light" parent="Theme.Material3.Light.Rikka">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowLightStatusBar">false</item>
@@ -24,7 +24,7 @@
 
     <style name="Theme.Light" parent="Base.AppTheme.Light" />
 
-    <style name="Base.AppTheme" parent="Theme.Material3.DynamicColors.Dark.Rikka">
+    <style name="Base.AppTheme" parent="Theme.Material3.Dark.Rikka">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:colorAccent">?colorPrimary</item>

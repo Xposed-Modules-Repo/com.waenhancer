@@ -39,6 +39,14 @@ public class EmbeddedSettingsActivity extends AppCompatActivity {
     }
 
     @Override
+    public android.content.res.Resources getResources() {
+        if (com.waenhancer.xposed.utils.XResManager.moduleResources != null) {
+            return com.waenhancer.xposed.utils.XResManager.moduleResources;
+        }
+        return super.getResources();
+    }
+
+    @Override
     public void onBackPressed() {
         if (!handleBack()) {
             super.onBackPressed();
