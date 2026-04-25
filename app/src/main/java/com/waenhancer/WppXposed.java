@@ -97,6 +97,11 @@ public class WppXposed implements IXposedHookLoadPackage, IXposedHookInitPackage
             field.set(null, resparam.res.addResource(modRes, field1.getInt(null)));
         }
 
+        for (var field : ResId.xml.class.getFields()) {
+            var field1 = R.xml.class.getField(field.getName());
+            field.set(null, resparam.res.addResource(modRes, field1.getInt(null)));
+        }
+
     }
 
     @Override

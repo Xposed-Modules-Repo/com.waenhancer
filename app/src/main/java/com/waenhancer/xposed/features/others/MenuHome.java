@@ -2,13 +2,14 @@ package com.waenhancer.xposed.features.others;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.Intent;
+import android.app.Dialog;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.Window;
+import android.view.WindowManager;
 
 import androidx.annotation.NonNull;
 
-import com.waenhancer.BuildConfig;
 import com.waenhancer.xposed.core.Feature;
 import com.waenhancer.xposed.core.WppCore;
 import com.waenhancer.xposed.core.components.AlertDialogWpp;
@@ -21,6 +22,7 @@ import java.util.LinkedHashSet;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
+import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 public class MenuHome extends Feature {
@@ -62,11 +64,51 @@ public class MenuHome extends Feature {
         iconDraw.setTint(0xff8696a0);
         itemMenu.setIcon(iconDraw);
         itemMenu.setOnMenuItemClickListener(item -> {
-            Intent intent = activity.getPackageManager().getLaunchIntentForPackage(BuildConfig.APPLICATION_ID);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            activity.startActivity(intent);
+            showWaeSettingsDialog(activity);
             return true;
         });
+    }
+
+    /**
+     * Show WaEnhancer settings as a full-screen dialog that looks like a native
+     * WhatsApp activity. This is the only approach that reliably works from within
+     * an Xposed hook — we cannot launch activities that aren't in the host manifest.
+     */
+    public static void showWaeSettingsDialog(Activity activity) {
+        try {
+            // Pick the right fullscreen theme based on WhatsApp's dark mode
+            int themeRes = DesignUtils.isNightMode()
+                    ? android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen
+                    : android.R.style.Theme_DeviceDefault_Light_NoActionBar_Fullscreen;
+
+            Dialog dialog = new Dialog(activity, themeRes);
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+            dialog.setContentView(SettingsViewBuilder.buildFullScreen(activity, dialog));
+            dialog.setCancelable(true);
+
+            Window window = dialog.getWindow();
+            if (window != null) {
+                window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
+                window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+
+                // Resolve status bar color from WhatsApp's colorPrimaryDark
+                int statusBarColor;
+                try {
+                    android.content.res.Resources res = activity.getResources();
+                    int id = res.getIdentifier("colorPrimaryDark", "color", activity.getPackageName());
+                    statusBarColor = id != 0 ? res.getColor(id, activity.getTheme())
+                            : (DesignUtils.isNightMode() ? 0xff0b141a : 0xff00695c);
+                } catch (Throwable ignored) {
+                    statusBarColor = DesignUtils.isNightMode() ? 0xff0b141a : 0xff00695c;
+                }
+                window.setStatusBarColor(statusBarColor);
+            }
+
+            dialog.show();
+        } catch (Throwable t) {
+            XposedBridge.log("[WaEnhancer] Failed to show settings dialog: " + t.getMessage());
+            Utils.showToast("Could not open WaEnhancer Settings", android.widget.Toast.LENGTH_SHORT);
+        }
     }
 
     private void InsertGhostModeOption(Menu menu, Activity activity, boolean newSettings) {

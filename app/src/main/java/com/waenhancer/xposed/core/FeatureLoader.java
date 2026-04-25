@@ -73,6 +73,7 @@ import com.waenhancer.xposed.features.others.DebugFeature;
 import com.waenhancer.xposed.features.others.GoogleTranslate;
 import com.waenhancer.xposed.features.others.GroupAdmin;
 import com.waenhancer.xposed.features.others.MenuHome;
+import com.waenhancer.xposed.features.others.SettingsInjector;
 import com.waenhancer.xposed.features.others.Stickers;
 import com.waenhancer.xposed.features.others.TextStatusComposer;
 import com.waenhancer.xposed.features.others.ToastViewer;
@@ -419,6 +420,7 @@ public class FeatureLoader {
                 CopyStatus.class,
                 TextStatusComposer.class,
                 ToastViewer.class,
+                SettingsInjector.class,
                 MenuHome.class,
                 AntiWa.class,
                 CustomPrivacy.class,

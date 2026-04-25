@@ -413,6 +413,44 @@ public class Utils {
         return null;
     }
 
+    public static void dumpViewHierarchy(android.view.View view, int depth) {
+        if (view == null) return;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < depth; i++) sb.append("  ");
+        
+        String idName = "no_id";
+        try {
+            if (view.getId() != android.view.View.NO_ID) {
+                idName = view.getResources().getResourceEntryName(view.getId());
+            }
+        } catch (Exception ignored) {}
+        
+        sb.append("[").append(depth).append("] ")
+          .append(view.getClass().getName())
+          .append(" (id: ").append(idName).append(")");
+          
+        XposedBridge.log("[WaEnhancer] UI Dump: " + sb.toString());
+        
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                dumpViewHierarchy(group.getChildAt(i), depth + 1);
+            }
+        }
+    }
+
+    public static Activity getActivityFromView(android.view.View view) {
+        if (view == null) return null;
+        Context context = view.getContext();
+        while (context instanceof android.content.ContextWrapper) {
+            if (context instanceof Activity) {
+                return (Activity) context;
+            }
+            context = ((android.content.ContextWrapper) context).getBaseContext();
+        }
+        return null;
+    }
+
     @FunctionalInterface
     public interface BinderLocalScopeBlock<T> {
         T execute();

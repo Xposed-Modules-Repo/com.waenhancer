@@ -3013,4 +3013,83 @@ public class Unobfuscator {
     public static Class<?> loadDialerProfilePictureLoader(ClassLoader classLoader) throws Exception {
         return UnobfuscatorCache.getInstance().getClass(classLoader, () -> findFirstClassUsingStrings(classLoader, StringMatchType.Contains, "DialerProfilePictureLoader/syncFetchProfilePhoto/onPhotoReceived"));
     }
+
+    public synchronized static Class loadSettingsActivityClass(ClassLoader loader) throws Exception {
+        return UnobfuscatorCache.getInstance().getClass(loader, "SettingsActivity", () -> {
+            String[] settingsIdentifiers = {
+                "help_center_url", 
+                "setting_help", 
+                "settings_privacy", 
+                "settings_account",
+                "privacy_checkup",
+                "lists_settings",
+                "settings_chat",
+                "settings_notifications",
+                "settings_data_usage"
+            };
+            
+            for (String identifier : settingsIdentifiers) {
+                try {
+                    Class<?> clazz = findFirstClassUsingStrings(loader, StringMatchType.Contains, identifier);
+                    if (clazz != null && android.app.Activity.class.isAssignableFrom(clazz)) {
+                        return clazz;
+                    }
+                } catch (Exception ignored) {}
+            }
+            
+            // Explicit common names
+            String[] names = {
+                "com.whatsapp.settings.Settings",
+                "com.whatsapp.settings.SettingsActivity",
+                "com.whatsapp.settings.ui.SettingsActivity",
+                "com.whatsapp.home.ui.SettingsActivity",
+                "com.whatsapp.Settings"
+            };
+            
+            for (String name : names) {
+                Class<?> clazz = XposedHelpers.findClassIfExists(name, loader);
+                if (clazz != null) return clazz;
+            }
+            
+            throw new ClassNotFoundException("SettingsActivity class not found after exhaustive search");
+        });
+    }
+
+    public synchronized static Class loadSettingsFragmentClass(ClassLoader loader) throws Exception {
+        return UnobfuscatorCache.getInstance().getClass(loader, "SettingsFragment", () -> {
+            String[] settingsIdentifiers = {
+                "help_center_url", 
+                "setting_help", 
+                "settings_privacy", 
+                "settings_account",
+                "privacy_checkup",
+                "lists_settings",
+                "group_privacy_settings"
+            };
+            
+            for (String identifier : settingsIdentifiers) {
+                try {
+                    Class<?> clazz = findFirstClassUsingStrings(loader, StringMatchType.Contains, identifier);
+                    if (clazz != null && !android.app.Activity.class.isAssignableFrom(clazz)) {
+                        // Check if it's a fragment class (standard or androidx)
+                        if (isFragmentClass(clazz)) {
+                            return clazz;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+            throw new ClassNotFoundException("SettingsFragment class not found");
+        });
+    }
+
+    private static boolean isFragmentClass(Class<?> clazz) {
+        while (clazz != null && !clazz.getName().equals("java.lang.Object")) {
+            String name = clazz.getName();
+            if (name.contains("Fragment") || name.equals("androidx.fragment.app.Fragment") || name.equals("android.app.Fragment")) {
+                return true;
+            }
+            clazz = clazz.getSuperclass();
+        }
+        return false;
+    }
 }

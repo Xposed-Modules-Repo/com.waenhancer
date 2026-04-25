@@ -122,4 +122,11 @@ public class ResId {
         public static int supported_versions_wpp;
         public static int supported_versions_business;
     }
+
+    public static class xml {
+        public static int fragment_general;
+        public static int fragment_privacy;
+        public static int fragment_media;
+        public static int fragment_customization;
+    }
 }

@@ -16,13 +16,17 @@ public class DeletedMessagesProvider extends ContentProvider {
 
     public static final String AUTHORITY = "com.waenhancer.provider";
     public static final String PATH_DELETED_MESSAGES = "deleted_messages";
+    public static final String PATH_PREFERENCES = "preferences";
     public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/" + PATH_DELETED_MESSAGES);
+    public static final Uri PREF_URI = Uri.parse("content://" + AUTHORITY + "/" + PATH_PREFERENCES);
 
     private static final int DELETED_MESSAGES = 1;
+    private static final int PREFERENCES = 2;
     private static final UriMatcher uriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
 
     static {
         uriMatcher.addURI(AUTHORITY, PATH_DELETED_MESSAGES, DELETED_MESSAGES);
+        uriMatcher.addURI(AUTHORITY, PATH_PREFERENCES, PREFERENCES);
     }
 
     private DelMessageStore dbHelper;
@@ -80,5 +84,29 @@ public class DeletedMessagesProvider extends ContentProvider {
     @Override
     public int update(@NonNull Uri uri, @Nullable ContentValues values, @Nullable String selection, @Nullable String[] selectionArgs) {
         return 0;
+    }
+
+    @Nullable
+    @Override
+    public android.os.Bundle call(@NonNull String method, @Nullable String arg, @Nullable android.os.Bundle extras) {
+        if ("put_preference".equals(method) && extras != null) {
+            String key = extras.getString("key");
+            Object value = extras.get("value");
+            if (key != null) {
+                var prefs = getContext().getSharedPreferences(getContext().getPackageName() + "_preferences", android.content.Context.MODE_PRIVATE);
+                var editor = prefs.edit();
+                if (value instanceof Boolean) editor.putBoolean(key, (Boolean) value);
+                else if (value instanceof String) editor.putString(key, (String) value);
+                else if (value instanceof Integer) editor.putInt(key, (Integer) value);
+                else if (value instanceof Long) editor.putLong(key, (Long) value);
+                else if (value instanceof Float) editor.putFloat(key, (Float) value);
+                editor.apply();
+                
+                // Also update the XSharedPreferences by making them readable if possible
+                // or rely on Xposed reloading them.
+                return android.os.Bundle.EMPTY;
+            }
+        }
+        return super.call(method, arg, extras);
     }
 }

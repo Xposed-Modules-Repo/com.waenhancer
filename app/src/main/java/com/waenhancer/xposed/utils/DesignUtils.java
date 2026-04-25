@@ -320,4 +320,54 @@ public class DesignUtils {
         icon.draw(canvas);
         return new BitmapDrawable(Utils.getApplication().getResources(), bitmap);
     }
+
+    public static Drawable getSelectableItemBackground(android.content.Context context) {
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+        return ContextCompat.getDrawable(context, outValue.resourceId);
+    }
+
+    public static int resolveColorAttr(android.content.Context context, int attr) {
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        if (context.getTheme().resolveAttribute(attr, outValue, true)) {
+            if (outValue.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && outValue.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
+                return outValue.data;
+            } else {
+                return ContextCompat.getColor(context, outValue.resourceId);
+            }
+        }
+        return 0;
+    }
+
+    public static int getThemeBackgroundColor(android.content.Context context) {
+        int color = resolveColorAttr(context, android.R.attr.windowBackground);
+        if (color == 0) return isNightMode() ? 0xff0b141a : 0xffffffff;
+        return color;
+    }
+
+    public static int getThemeTextColorPrimary(android.content.Context context) {
+        int color = resolveColorAttr(context, android.R.attr.textColorPrimary);
+        if (color == 0) return isNightMode() ? 0xffffffff : 0xff000000;
+        return color;
+    }
+
+    public static int getThemeTextColorSecondary(android.content.Context context) {
+        int color = resolveColorAttr(context, android.R.attr.textColorSecondary);
+        if (color == 0) return isNightMode() ? 0xff8696a0 : 0xff667781;
+        return color;
+    }
+
+    public static int getThemeHeaderColor(android.content.Context context) {
+        // Try to find a header-like color or fallback to windowBackground
+        int color = resolveColorAttr(context, android.R.attr.colorPrimary);
+        if (color == 0) color = resolveColorAttr(context, android.R.attr.background);
+        if (color == 0 || color == -1) return isNightMode() ? 0xff1f2c34 : 0xffffffff;
+        return color;
+    }
+
+    public static int getThemeAccentColor(android.content.Context context) {
+        int color = resolveColorAttr(context, android.R.attr.colorAccent);
+        if (color == 0) return 0xff25d366; // WhatsApp Green
+        return color;
+    }
 }

@@ -442,6 +442,22 @@ public class WppCore {
                 : XposedHelpers.findClass("com.whatsapp.viewonce.ui.messaging.ViewOnceViewerActivity", loader);
     }
 
+    public synchronized static Class getSettingsActivityClass(@NonNull ClassLoader loader) {
+        try {
+            return Unobfuscator.loadSettingsActivityClass(loader);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public synchronized static Class getSettingsFragmentClass(@NonNull ClassLoader loader) {
+        try {
+            return Unobfuscator.loadSettingsFragmentClass(loader);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public synchronized static Class getAboutActivityClass(@NonNull ClassLoader loader) {
         Class oldClass = XposedHelpers.findClassIfExists("com.whatsapp.settings.About", loader);
 
