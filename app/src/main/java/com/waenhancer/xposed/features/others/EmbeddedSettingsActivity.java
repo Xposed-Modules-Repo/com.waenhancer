@@ -19,7 +19,8 @@ public class EmbeddedSettingsActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
-        boolean isDark = com.waenhancer.xposed.utils.DesignUtils.isNightMode(getApplicationContext());
+        boolean isDark = com.waenhancer.xposed.utils.DesignUtils.isNightMode(this);
+        android.util.Log.i("WAE", "EmbeddedSettingsActivity: Setting theme, isDark=" + isDark);
         setTheme(isDark ? R.style.Theme : R.style.Theme_Light);
         super.onCreate(savedInstanceState);
         host = SettingsViewBuilder.buildHost(this);

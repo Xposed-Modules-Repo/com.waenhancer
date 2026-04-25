@@ -12,21 +12,22 @@ import com.waenhancer.R;
 import com.waenhancer.preference.ContactPickerPreference;
 import com.waenhancer.preference.FileSelectPreference;
 import com.waenhancer.xposed.features.general.LiteMode;
+import com.waenhancer.xposed.utils.ResId;
 
 public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
         super.onCreatePreferences(savedInstanceState, rootKey);
-        setPreferencesFromResource(R.xml.embedded_settings_root, rootKey);
-        setToolbarTitle(R.string.app_name);
+        setPreferencesFromResource(ResId.xml.embedded_settings_root, rootKey);
+        setToolbarTitle(ResId.string.app_name);
     }
 
     public static class GeneralScreen extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_general, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_general, rootKey);
         }
     }
 
@@ -34,7 +35,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_home_screen, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_home_screen, rootKey);
         }
     }
 
@@ -42,7 +43,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_conversation, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_conversation, rootKey);
         }
     }
 
@@ -50,7 +51,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_privacy, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_privacy, rootKey);
             var deletedMessages = findPreference("open_deleted_messages");
             if (deletedMessages != null) {
                 deletedMessages.setOnPreferenceClickListener(preference -> {
@@ -65,7 +66,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_status, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_status, rootKey);
         }
     }
 
@@ -73,7 +74,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_calls, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_calls, rootKey);
         }
 
         @Override
@@ -100,7 +101,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_media, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_media, rootKey);
 
             var downloadStatus = findPreference("downloadstatus");
             if (downloadStatus != null) {
@@ -131,7 +132,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_audio, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_audio, rootKey);
         }
     }
 
@@ -139,7 +140,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_appearance, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_appearance, rootKey);
         }
     }
 
@@ -147,7 +148,7 @@ public class EmbeddedSettingsFragment extends EmbeddedBasePreferenceFragment {
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
             super.onCreatePreferences(savedInstanceState, rootKey);
-            setPreferencesFromResource(R.xml.embedded_settings_advanced, rootKey);
+            setPreferencesFromResource(ResId.xml.embedded_settings_advanced, rootKey);
         }
     }
 }

@@ -55,14 +55,28 @@ public abstract class Feature {
 
     protected String getSafeString(String key, String defaultValue) {
         try {
-            return prefs.getString(key, defaultValue);
-        } catch (ClassCastException e) {
-            // Handle migration from Boolean (previous versions used switches for some keys like "open_wae")
-            try {
-                return prefs.getBoolean(key, true) ? "1" : "0";
-            } catch (ClassCastException e2) {
-                return defaultValue;
-            }
+            prefs.reload();
+            Object val = prefs.getAll().get(key);
+            if (val == null) return defaultValue;
+            if (val instanceof String) return (String) val;
+            if (val instanceof Boolean) return (Boolean) val ? "1" : "0";
+            return String.valueOf(val);
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    protected float getSafeFloat(String key, float defaultValue) {
+        try {
+            Object val = prefs.getAll().get(key);
+            if (val == null) return defaultValue;
+            if (val instanceof Float) return (Float) val;
+            if (val instanceof Integer) return ((Integer) val).floatValue();
+            if (val instanceof String) return Float.parseFloat((String) val);
+            if (val instanceof Double) return ((Double) val).floatValue();
+            return defaultValue;
+        } catch (Exception e) {
+            return defaultValue;
         }
     }
 }

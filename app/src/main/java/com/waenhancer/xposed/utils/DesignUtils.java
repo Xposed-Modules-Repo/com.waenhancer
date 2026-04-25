@@ -120,45 +120,60 @@ public class DesignUtils {
 
     // Colors
     public static int getPrimaryTextColor() {
-        var textColor = mPrefs.getInt("text_color", 0);
-        if (shouldUseMonetColors()) {
-            var monetTextColor = resolveMonetColor(isNightMode() ? "system_neutral1_100" : "system_neutral1_900");
-            if (monetTextColor != 0) {
-                textColor = monetTextColor;
+        try {
+            if (mPrefs == null) return isNightMode() ? 0xfffffffe : 0xff000001;
+            var textColor = mPrefs.getInt("text_color", 0);
+            if (shouldUseMonetColors()) {
+                var monetTextColor = resolveMonetColor(isNightMode() ? "system_neutral1_100" : "system_neutral1_900");
+                if (monetTextColor != 0) {
+                    textColor = monetTextColor;
+                }
             }
+            if (textColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
+                return DesignUtils.isNightMode() ? 0xfffffffe : 0xff000001;
+            }
+            return textColor;
+        } catch (Throwable t) {
+            return isNightMode() ? 0xfffffffe : 0xff000001;
         }
-        if (textColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
-            return DesignUtils.isNightMode() ? 0xfffffffe : 0xff000001;
-        }
-        return textColor;
     }
 
     public static int getUnSeenColor() {
-        var primaryColor = mPrefs.getInt("primary_color", 0);
-        if (shouldUseMonetColors()) {
-            var monetPrimaryColor = resolveMonetColor(isNightMode() ? "system_accent1_300" : "system_accent1_600");
-            if (monetPrimaryColor != 0) {
-                primaryColor = monetPrimaryColor;
+        try {
+            if (mPrefs == null) return 0xFF25d366;
+            var primaryColor = mPrefs.getInt("primary_color", 0);
+            if (shouldUseMonetColors()) {
+                var monetPrimaryColor = resolveMonetColor(isNightMode() ? "system_accent1_300" : "system_accent1_600");
+                if (monetPrimaryColor != 0) {
+                    primaryColor = monetPrimaryColor;
+                }
             }
-        }
-        if (primaryColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
+            if (primaryColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
+                return 0xFF25d366;
+            }
+            return primaryColor;
+        } catch (Throwable t) {
             return 0xFF25d366;
         }
-        return primaryColor;
     }
 
     public static int getPrimarySurfaceColor() {
-        var backgroundColor = mPrefs.getInt("background_color", 0);
-        if (shouldUseMonetColors()) {
-            var monetBackgroundColor = resolveMonetColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_10");
-            if (monetBackgroundColor != 0) {
-                backgroundColor = monetBackgroundColor;
+        try {
+            if (mPrefs == null) return isNightMode() ? 0xff121212 : 0xfffffffe;
+            var backgroundColor = mPrefs.getInt("background_color", 0);
+            if (shouldUseMonetColors()) {
+                var monetBackgroundColor = resolveMonetColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_10");
+                if (monetBackgroundColor != 0) {
+                    backgroundColor = monetBackgroundColor;
+                }
             }
+            if (backgroundColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
+                return DesignUtils.isNightMode() ? 0xff121212 : 0xfffffffe;
+            }
+            return backgroundColor;
+        } catch (Throwable t) {
+            return isNightMode() ? 0xff121212 : 0xfffffffe;
         }
-        if (backgroundColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
-            return DesignUtils.isNightMode() ? 0xff121212 : 0xfffffffe;
-        }
-        return backgroundColor;
     }
 
     public static Drawable generatePrimaryColorDrawable(Drawable drawable) {
@@ -197,15 +212,33 @@ public class DesignUtils {
     }
 
     public static boolean isNightMode(android.content.Context context) {
-        if (context == null) return Utils.getDefaultTheme() <= 0 ? isNightModeBySystem() : Utils.getDefaultTheme() == 2;
-        
-        // Check context configuration first (most accurate for the current activity)
-        int uiMode = context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
-        if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) return true;
-        if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_NO) return false;
+        try {
+            if (context == null) {
+                boolean systemNight = isNightModeBySystem();
+                int waTheme = Utils.getDefaultTheme();
+                // XposedBridge.log("[WAE] DesignUtils: No context, systemNight=" + systemNight + ", waTheme=" + waTheme);
+                return waTheme <= 0 ? systemNight : waTheme == 2;
+            }
+            
+            // Check context configuration first (most accurate for the current activity)
+            int uiMode = context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
+                return true;
+            }
+            if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_NO) {
+                // If it's explicitly NO, we might still want to check WhatsApp theme
+            }
 
-        // Fallback to WhatsApp preferences
-        return Utils.getDefaultTheme() <= 0 ? isNightModeBySystem() : Utils.getDefaultTheme() == 2;
+            // Fallback to WhatsApp preferences
+            int waTheme = Utils.getDefaultTheme();
+            if (waTheme == 2) return true;
+            if (waTheme == 1) return false;
+            
+            // Final fallback: system
+            return isNightModeBySystem();
+        } catch (Throwable t) {
+            return isNightModeBySystem();
+        }
     }
 
     public static boolean isNightModeBySystem() {

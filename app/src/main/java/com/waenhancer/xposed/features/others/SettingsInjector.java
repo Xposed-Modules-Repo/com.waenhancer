@@ -56,11 +56,22 @@ public class SettingsInjector extends Feature {
     }
 
     private void checkAndInject(ViewGroup recyclerView) {
+        checkAndInject(recyclerView, 0);
+    }
+
+    private void checkAndInject(ViewGroup recyclerView, int attempt) {
         Activity activity = Utils.getActivityFromView(recyclerView);
         if (activity == null) return;
 
         if (hasSettingsMarkers(recyclerView)) {
             if (!isAlreadyInjected(recyclerView)) {
+                Object adapter = XposedHelpers.callMethod(recyclerView, "getAdapter");
+                if (adapter == null && attempt < 3) {
+                    XposedBridge.log("[WaEnhancer] SettingsInjector: Adapter null, retrying in 500ms... (attempt " + (attempt + 1) + ")");
+                    hunterHandler.postDelayed(() -> checkAndInject(recyclerView, attempt + 1), 500);
+                    return;
+                }
+                
                 XposedBridge.log("[WaEnhancer] SettingsInjector: Detected Settings screen in " + activity.getClass().getSimpleName());
                 boolean success = injectIntoRecyclerView(recyclerView, activity);
                 XposedBridge.log("[WaEnhancer] SettingsInjector: Injection success = " + success);
@@ -129,21 +140,36 @@ public class SettingsInjector extends Feature {
             try {
                 addHeaderMethod = Unobfuscator.loadViewAddSearchBarMethod(classLoader);
             } catch (Exception e) {
-                XposedBridge.log("[WaEnhancer] SettingsInjector: Failed to load addHeader method: " + e.getMessage());
+                XposedBridge.log("[WaEnhancer] SettingsInjector: Default addHeader method not found, searching hierarchy for fallbacks...");
+                // Fallback: search hierarchy for any method that takes a single View and has "Header" or "Search" in its name
+                Class<?> currentClass = adapter.getClass();
+                while (currentClass != null && currentClass != Object.class && addHeaderMethod == null) {
+                    for (java.lang.reflect.Method m : currentClass.getDeclaredMethods()) {
+                        if (m.getParameterCount() == 1 && m.getParameterTypes()[0] == View.class && 
+                            (m.getName().toLowerCase().contains("header") || m.getName().toLowerCase().contains("search"))) {
+                            m.setAccessible(true);
+                            addHeaderMethod = m;
+                            XposedBridge.log("[WaEnhancer] SettingsInjector: Found potential fallback method: " + m.getName() + " in " + currentClass.getName());
+                            break;
+                        }
+                    }
+                    currentClass = currentClass.getSuperclass();
+                }
             }
 
             if (addHeaderMethod != null) {
-                XposedBridge.log("[WaEnhancer] SettingsInjector: Found addHeader method: " + addHeaderMethod.getName() + " in " + addHeaderMethod.getDeclaringClass().getName());
-                if (addHeaderMethod.getDeclaringClass().isAssignableFrom(adapter.getClass())) {
-                    View customRow = createCustomRow(activity);
-                    XposedHelpers.callMethod(adapter, addHeaderMethod.getName(), customRow);
-                    XposedBridge.log("[WaEnhancer] SettingsInjector: Successfully called addHeader on adapter");
-                    return true;
-                } else {
-                    XposedBridge.log("[WaEnhancer] SettingsInjector: Adapter " + adapter.getClass().getName() + " is NOT assignable to " + addHeaderMethod.getDeclaringClass().getName());
+                XposedBridge.log("[WaEnhancer] SettingsInjector: Using method: " + addHeaderMethod.getName() + " in " + addHeaderMethod.getDeclaringClass().getName());
+                View customRow = createCustomRow(activity);
+                addHeaderMethod.setAccessible(true);
+                if (addHeaderMethod.getParameterCount() == 1) {
+                    addHeaderMethod.invoke(adapter, customRow);
+                } else if (addHeaderMethod.getParameterCount() == 2 && addHeaderMethod.getParameterTypes()[1] == int.class) {
+                    addHeaderMethod.invoke(adapter, customRow, 0);
                 }
+                XposedBridge.log("[WaEnhancer] SettingsInjector: Successfully called " + addHeaderMethod.getName() + " on adapter");
+                return true;
             } else {
-                XposedBridge.log("[WaEnhancer] SettingsInjector: No addHeader method found, cannot inject tile");
+                XposedBridge.log("[WaEnhancer] SettingsInjector: No suitable injection method found in " + adapter.getClass().getSimpleName() + " hierarchy");
             }
         } catch (Exception e) {
             XposedBridge.log("[WaEnhancer] SettingsInjector: Tile injection error: " + e.getMessage());

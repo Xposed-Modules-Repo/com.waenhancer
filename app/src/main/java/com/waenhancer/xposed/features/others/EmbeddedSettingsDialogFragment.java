@@ -4,6 +4,7 @@ import android.app.Dialog;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
+import de.robv.android.xposed.XposedBridge;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
@@ -25,23 +26,26 @@ public class EmbeddedSettingsDialogFragment extends DialogFragment {
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        int themeRes = DesignUtils.isNightMode() ? ResId.style.Theme : ResId.style.Theme_Light;
-        if (themeRes == 0) {
-            themeRes = DesignUtils.isNightMode()
-                    ? android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen
-                    : android.R.style.Theme_DeviceDefault_Light_NoActionBar_Fullscreen;
-        }
-        setStyle(STYLE_NORMAL, themeRes);
-        if (requireActivity() instanceof AppCompatActivity appCompatActivity) {
-            FilePicker.registerFilePicker(appCompatActivity);
+        try {
+            super.onCreate(savedInstanceState);
+            int themeRes = DesignUtils.isNightMode() ? ResId.style.Theme : ResId.style.Theme_Light;
+            if (themeRes == 0) {
+                themeRes = DesignUtils.isNightMode()
+                        ? android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen
+                        : android.R.style.Theme_DeviceDefault_Light_NoActionBar_Fullscreen;
+            }
+            setStyle(STYLE_NORMAL, themeRes);
+        } catch (Throwable t) {
+            XposedBridge.log("[WaEnhancer] EmbeddedSettingsDialogFragment: Error in onCreate: " + t.getMessage());
+            t.printStackTrace();
         }
     }
+
     @Override
     public android.content.Context getContext() {
         android.content.Context context = super.getContext();
         if (context == null) return null;
-        int themeRes = DesignUtils.isNightMode() ? com.waenhancer.xposed.utils.ResId.style.Theme : com.waenhancer.xposed.utils.ResId.style.Theme_Light;
+        int themeRes = DesignUtils.isNightMode() ? ResId.style.Theme : ResId.style.Theme_Light;
         return new android.view.ContextThemeWrapper(context, themeRes) {
             @Override
             public android.content.res.Resources getResources() {
@@ -49,6 +53,14 @@ public class EmbeddedSettingsDialogFragment extends DialogFragment {
                     return com.waenhancer.xposed.utils.XResManager.moduleResources;
                 }
                 return super.getResources();
+            }
+
+            @Override
+            public Object getSystemService(String name) {
+                if (android.content.Context.LAYOUT_INFLATER_SERVICE.equals(name)) {
+                    return android.view.LayoutInflater.from(getBaseContext()).cloneInContext(this);
+                }
+                return super.getSystemService(name);
             }
         };
     }
@@ -58,44 +70,61 @@ public class EmbeddedSettingsDialogFragment extends DialogFragment {
     public View onCreateView(@NonNull android.view.LayoutInflater inflater,
             @Nullable ViewGroup container,
             @Nullable Bundle savedInstanceState) {
-        host = SettingsViewBuilder.buildHost(getContext());
-        return host.root;
+        try {
+            host = SettingsViewBuilder.buildHost(getContext());
+            return host.root;
+        } catch (Throwable t) {
+            XposedBridge.log("[WaEnhancer] EmbeddedSettingsDialogFragment: Error in onCreateView: " + t.getMessage());
+            t.printStackTrace();
+            return new View(getContext());
+        }
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        if (savedInstanceState == null) {
-            getChildFragmentManager()
-                    .beginTransaction()
-                    .replace(host.container.getId(), new EmbeddedSettingsFragment())
-                    .commitNowAllowingStateLoss();
-        }
+        try {
+            super.onViewCreated(view, savedInstanceState);
+            if (host == null) return;
 
-        Runnable updateToolbar = new Runnable() {
-            @Override
-            public void run() {
-                Fragment current = getChildFragmentManager().findFragmentById(host.container.getId());
-                CharSequence title = getString(R.string.app_name);
-                if (current instanceof EmbeddedBasePreferenceFragment embeddedFragment) {
-                    title = embeddedFragment.getToolbarTitle();
-                }
-                host.titleView.setText(title);
-                host.backButton.setOnClickListener(v -> handleBack());
+            if (savedInstanceState == null) {
+                getChildFragmentManager()
+                        .beginTransaction()
+                        .replace(host.container.getId(), new EmbeddedSettingsFragment())
+                        .commitNowAllowingStateLoss();
             }
-        };
-        getChildFragmentManager().addOnBackStackChangedListener(updateToolbar::run);
-        updateToolbar.run();
 
-        requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(),
-                new androidx.activity.OnBackPressedCallback(true) {
-                    @Override
-                    public void handleOnBackPressed() {
-                        if (!handleBack()) {
-                            dismissAllowingStateLoss();
-                        }
+            Runnable updateToolbar = new Runnable() {
+                @Override
+                public void run() {
+                    Fragment current = getChildFragmentManager().findFragmentById(host.container.getId());
+                    CharSequence title = getString(R.string.app_name);
+                    if (current instanceof EmbeddedBasePreferenceFragment embeddedFragment) {
+                        title = embeddedFragment.getToolbarTitle();
                     }
-                });
+                    host.titleView.setText(title);
+                    host.backButton.setOnClickListener(v -> handleBack());
+                }
+            };
+            getChildFragmentManager().addOnBackStackChangedListener(updateToolbar::run);
+            updateToolbar.run();
+
+            try {
+                requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(),
+                        new androidx.activity.OnBackPressedCallback(true) {
+                            @Override
+                            public void handleOnBackPressed() {
+                                if (!handleBack()) {
+                                    dismissAllowingStateLoss();
+                                }
+                            }
+                        });
+            } catch (Throwable t) {
+                XposedBridge.log("[WaEnhancer] EmbeddedSettingsDialogFragment: OnBackPressedDispatcher not supported fallback used.");
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("[WaEnhancer] EmbeddedSettingsDialogFragment: Error in onViewCreated: " + t.getMessage());
+            t.printStackTrace();
+        }
     }
 
     @Override

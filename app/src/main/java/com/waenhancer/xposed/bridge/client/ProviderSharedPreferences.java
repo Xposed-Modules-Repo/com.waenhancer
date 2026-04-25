@@ -41,14 +41,10 @@ public class ProviderSharedPreferences implements SharedPreferences {
         try {
             return localPrefs.getString(key, defValue);
         } catch (ClassCastException e) {
-            if ("open_wae".equals(key)) {
-                try {
-                    return localPrefs.getBoolean(key, false) ? "1" : "0";
-                } catch (Exception ignored) {}
-            }
             // Fallback: try to get any value as string
             try {
                 Object val = localPrefs.getAll().get(key);
+                if (val instanceof Boolean boolVal) return boolVal ? "1" : "0";
                 return val != null ? String.valueOf(val) : defValue;
             } catch (Exception ignored) {}
             return defValue;
@@ -70,11 +66,13 @@ public class ProviderSharedPreferences implements SharedPreferences {
         try {
             return localPrefs.getFloat(key, defValue);
         } catch (ClassCastException e) {
-            if (key != null && key.contains("alpha")) {
-                try {
-                    return (float) localPrefs.getInt(key, (int) defValue);
-                } catch (Exception ignored) {}
-            }
+            try {
+                Object val = localPrefs.getAll().get(key);
+                if (val instanceof Integer intVal) return (float) intVal;
+                if (val instanceof String strVal) return Float.parseFloat(strVal);
+                if (val instanceof Long longVal) return (float) longVal;
+                if (val instanceof Double doubleVal) return (float) doubleVal.doubleValue();
+            } catch (Exception ignored) {}
             return defValue;
         }
     }
@@ -115,6 +113,8 @@ public class ProviderSharedPreferences implements SharedPreferences {
             if (!(serializable instanceof Map<?, ?> rawMap)) {
                 return;
             }
+            
+            android.util.Log.i("WAE", "Hydrating " + rawMap.size() + " preferences from provider");
             var editor = localPrefs.edit().clear();
             for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
                 if (!(entry.getKey() instanceof String key)) {
@@ -125,10 +125,6 @@ public class ProviderSharedPreferences implements SharedPreferences {
                 // Specific migrations during hydration
                 if ("open_wae".equals(key) && value instanceof Boolean boolVal) {
                     editor.putString(key, boolVal ? "1" : "0");
-                    continue;
-                }
-                if (key.contains("alpha") && value instanceof Integer intVal) {
-                    editor.putFloat(key, (float) intVal);
                     continue;
                 }
 
@@ -142,6 +138,8 @@ public class ProviderSharedPreferences implements SharedPreferences {
                     editor.putLong(key, longValue);
                 } else if (value instanceof Float floatValue) {
                     editor.putFloat(key, floatValue);
+                } else if (value instanceof Double doubleValue) {
+                    editor.putFloat(key, (float) doubleValue.doubleValue());
                 } else if (value instanceof Set<?> setValue) {
                     var strings = new java.util.HashSet<String>();
                     boolean allStrings = true;
@@ -158,7 +156,8 @@ public class ProviderSharedPreferences implements SharedPreferences {
                 }
             }
             editor.apply();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            android.util.Log.e("WAE", "Hydration failed: " + e.getMessage());
         }
     }
 
