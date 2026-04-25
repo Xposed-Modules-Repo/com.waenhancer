@@ -297,6 +297,10 @@ public class Others extends Feature {
         var field = ReflectionUtils.getFieldByExtendType(convClass, refreshStatusClass);
         logDebug("disablePhotoProfileStatus", Unobfuscator.getMethodDescriptor(method));
         logDebug("disablePhotoProfileStatus Field", Unobfuscator.getFieldDescriptor(field));
+        if (field == null) {
+            XposedBridge.log("WaEnhancer: disablePhotoProfileStatus skipped because refresh status field was not found");
+            return;
+        }
         XposedBridge.hookMethod(method, new XC_MethodHook() {
             private Object backup;
 

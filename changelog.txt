@@ -1,3 +1,9 @@
+[Added]
+- Added Support for WA/WB 2.26.15.xx
+- "WA Enhancer Embedded settings" to main menu
+- UI Improvements
+
 [Improved]
-- Improved changelog activity
-- The user can now directly switch/install either beta or release channel from the app.
+- Fixed settings not loading on some devices
+
+If enabled WA Enhancer Embedded settings, then you can update WA Enhancer settings directly from the WhatsApp.

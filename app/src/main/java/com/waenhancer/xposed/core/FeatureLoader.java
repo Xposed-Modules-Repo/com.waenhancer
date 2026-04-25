@@ -133,6 +133,7 @@ public class FeatureLoader {
                     @SuppressWarnings("deprecation")
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                         mApp = (Application) param.args[0];
+                        String processName = Application.getProcessName();
 
                         // Inject Booloader Spoofer
                         if (pref.getBoolean("bootloader_spoofer", false)) {
@@ -145,6 +146,10 @@ public class FeatureLoader {
                         PackageInfo packageInfo = packageManager.getPackageInfo(mApp.getPackageName(), 0);
                         XposedBridge.log(packageInfo.versionName);
                         currentVersion = packageInfo.versionName;
+                        if (!Objects.equals(processName, mApp.getPackageName())) {
+                            XposedBridge.log("[WAE] Skipping heavy hook initialization in secondary process: " + processName);
+                            return;
+                        }
 
                         // Diagnostic: Log theme-related preferences from multiple common files
                         try {

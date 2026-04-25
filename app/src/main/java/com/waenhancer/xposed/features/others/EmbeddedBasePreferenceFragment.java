@@ -41,6 +41,7 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
     private static final String ARG_TITLE = "embedded_title";
 
     protected ProviderSharedPreferences mPrefs;
+    private boolean suppressRestartBroadcast;
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
@@ -90,7 +91,7 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
     @Override
     public void onResume() {
         super.onResume();
-        applyDynamicStates(null);
+        runWithoutRestartBroadcast(() -> applyDynamicStates(null));
         refreshSpecialSummaries();
     }
 
@@ -157,11 +158,13 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, @Nullable String key) {
-        applyDynamicStates(key);
+        runWithoutRestartBroadcast(() -> applyDynamicStates(key));
         refreshSpecialSummaries();
-        try {
-            requireContext().sendBroadcast(new Intent(BuildConfig.APPLICATION_ID + ".MANUAL_RESTART"));
-        } catch (Exception ignored) {
+        if (!suppressRestartBroadcast) {
+            try {
+                requireContext().sendBroadcast(new Intent(BuildConfig.APPLICATION_ID + ".MANUAL_RESTART"));
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -237,7 +240,19 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
         pref.setEnabled(enabled);
         if (!enabled && pref instanceof MaterialSwitchPreference) {
             MaterialSwitchPreference switchPreference = (MaterialSwitchPreference) pref;
-            switchPreference.setChecked(false);
+            if (switchPreference.isChecked()) {
+                runWithoutRestartBroadcast(() -> switchPreference.setChecked(false));
+            }
+        }
+    }
+
+    private void runWithoutRestartBroadcast(@NonNull Runnable runnable) {
+        boolean previous = suppressRestartBroadcast;
+        suppressRestartBroadcast = true;
+        try {
+            runnable.run();
+        } finally {
+            suppressRestartBroadcast = previous;
         }
     }
 
@@ -308,7 +323,9 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
             pref.setSummary(supportedSummary);
             return;
         }
-        mPrefs.edit().putBoolean(key, false).apply();
+        if (mPrefs.getBoolean(key, false)) {
+            runWithoutRestartBroadcast(() -> mPrefs.edit().putBoolean(key, false).apply());
+        }
         setPreferenceState(key, false);
         pref.setSummary(unsupportedSummary);
     }

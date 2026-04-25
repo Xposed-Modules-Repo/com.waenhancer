@@ -37,6 +37,7 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
     private static final String RELEASES_URL = "https://github.com/mubashardev/WaEnhancer/releases";
     private static final String LATEST_STABLE_URL = "https://github.com/mubashardev/WaEnhancer/releases/latest";
     protected SharedPreferences mPrefs;
+    private boolean suppressRestartBroadcast;
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
@@ -58,7 +59,7 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
             @Nullable Bundle savedInstanceState) {
-        chanceStates(null);
+        runWithoutRestartBroadcast(() -> chanceStates(null));
         monitorPreference();
         return super.onCreateView(inflater, container, savedInstanceState);
     }
@@ -69,6 +70,14 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         setDisplayHomeAsUpEnabled(true);
         initializeReleaseChannelPreference();
         setupReleaseChannelPreference();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (mPrefs != null) {
+            mPrefs.unregisterOnSharedPreferenceChangeListener(this);
+        }
     }
 
     @Override
@@ -128,9 +137,11 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
             String channel = mPrefs.getString("release_channel", "stable");
             WppCore.setPrivString("release_channel", channel);
         }
-        Intent intent = new Intent(BuildConfig.APPLICATION_ID + ".MANUAL_RESTART");
-        App.getInstance().sendBroadcast(intent);
-        chanceStates(s);
+        runWithoutRestartBroadcast(() -> chanceStates(s));
+        if (!suppressRestartBroadcast) {
+            Intent intent = new Intent(BuildConfig.APPLICATION_ID + ".MANUAL_RESTART");
+            App.getInstance().sendBroadcast(intent);
+        }
     }
 
     private void setPreferenceState(String key, boolean enabled) {
@@ -138,8 +149,21 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         if (pref != null) {
             pref.setEnabled(enabled);
             if (pref instanceof MaterialSwitchPreference && !enabled) {
-                ((MaterialSwitchPreference) pref).setChecked(false);
+                var switchPreference = (MaterialSwitchPreference) pref;
+                if (switchPreference.isChecked()) {
+                    runWithoutRestartBroadcast(() -> switchPreference.setChecked(false));
+                }
             }
+        }
+    }
+
+    private void runWithoutRestartBroadcast(@NonNull Runnable runnable) {
+        boolean previous = suppressRestartBroadcast;
+        suppressRestartBroadcast = true;
+        try {
+            runnable.run();
+        } finally {
+            suppressRestartBroadcast = previous;
         }
     }
 
@@ -289,7 +313,9 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
             pref.setSummary(supportedSummary);
             return;
         }
-        mPrefs.edit().putBoolean(key, false).apply();
+        if (mPrefs.getBoolean(key, false)) {
+            runWithoutRestartBroadcast(() -> mPrefs.edit().putBoolean(key, false).apply());
+        }
         setPreferenceState(key, false);
         pref.setSummary(unsupportedSummary);
     }
@@ -351,8 +377,13 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         if (preferenceKey == null)
             return;
 
+        var rootView = getView();
+        if (rootView == null) {
+            return;
+        }
+
         // Small delay to ensure preference screen is fully loaded
-        getView().postDelayed(() -> {
+        rootView.postDelayed(() -> {
             var preference = findPreference(preferenceKey);
             if (preference != null) {
                 scrollToPreference(preference);
@@ -367,8 +398,13 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
      * Highlight a preference with a temporary background color.
      */
     private void highlightPreference(androidx.preference.Preference preference) {
+        var rootView = getView();
+        if (rootView == null) {
+            return;
+        }
+
         // Wait longer to ensure RecyclerView has laid out the views after scrolling
-        getView().postDelayed(() -> {
+        rootView.postDelayed(() -> {
             androidx.recyclerview.widget.RecyclerView recyclerView = getListView();
             if (recyclerView == null || preference == null || preference.getKey() == null)
                 return;
@@ -529,10 +565,14 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
             boolean installedIsBeta = installedVersion.contains("-beta-");
             String installedChannel = installedIsBeta ? "beta" : "stable";
 
-            if (pref instanceof ListPreference) {
-                ((ListPreference) pref).setValue(installedChannel);
-            }
-            mPrefs.edit().putString("release_channel", installedChannel).apply();
+            runWithoutRestartBroadcast(() -> {
+                if (pref instanceof ListPreference && !installedChannel.equals(((ListPreference) pref).getValue())) {
+                    ((ListPreference) pref).setValue(installedChannel);
+                }
+                if (!installedChannel.equals(mPrefs.getString("release_channel", "stable"))) {
+                    mPrefs.edit().putString("release_channel", installedChannel).apply();
+                }
+            });
             WppCore.setPrivString("release_channel", installedChannel);
         } catch (Exception ignored) {
         }
