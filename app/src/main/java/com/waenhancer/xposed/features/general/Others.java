@@ -434,7 +434,8 @@ public class Others extends Feature {
                     var reactionView = (ViewGroup) viewGroup.findViewById(Utils.getID("reactions_bubble_layout", "id"));
                     if (reactionView != null && reactionView.getVisibility() == View.VISIBLE) {
                         for (int i = 0; i < reactionView.getChildCount(); i++) {
-                            if (reactionView.getChildAt(i) instanceof TextView textView) {
+                            if (reactionView.getChildAt(i) instanceof TextView) {
+                                TextView textView = (TextView) reactionView.getChildAt(i);
                                 if (textView.getText().toString().contains(emoji)) {
                                     WppCore.sendReaction("", fMessage.getObject());
                                     return;

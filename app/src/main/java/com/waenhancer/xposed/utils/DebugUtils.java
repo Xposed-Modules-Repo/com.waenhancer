@@ -74,20 +74,23 @@ public class DebugUtils {
         StringBuilder sb = new StringBuilder();
         if (value == null)
             return "null";
-        if (value instanceof List list) {
+        if (value instanceof List) {
+            List<?> list = (List<?>) value;
             sb.append("List[");
-            for (var item : list) {
+            for (Object item : list) {
                 sb.append(parseValue(item)).append(", ");
             }
             sb.append("]");
-        } else if (value instanceof Map<?, ?> map) {
+        } else if (value instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) value;
             var keys = map.keySet();
             sb.append("Map[");
-            for (var key : keys) {
+            for (Object key : keys) {
                 sb.append(key).append(": ").append(parseValue(map.get(key))).append(" ");
             }
             sb.append("]");
-        } else if (value instanceof byte[] bytes) {
+        } else if (value instanceof byte[]) {
+            byte[] bytes = (byte[]) value;
             try {
                 sb.append(new String(bytes, StandardCharsets.UTF_8));
             } catch (Exception ignored) {

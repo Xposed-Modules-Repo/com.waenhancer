@@ -309,7 +309,8 @@ public class CustomView extends Feature {
 
     private static SerialTerm toSerialTerm(Term<?> term) {
         SerialTerm st = new SerialTerm();
-        if (term instanceof TermFunction.LinearGradient lg) {
+        if (term instanceof TermFunction.LinearGradient) {
+            TermFunction.LinearGradient lg = (TermFunction.LinearGradient) term;
             st.type = SerialTerm.LINEAR_GRADIENT;
             st.strValue = lg.toString();
             st.gradientAngle = lg.getAngle().getValue();
@@ -320,24 +321,29 @@ public class CustomView extends Feature {
                 st.gradientColors[i] = stops.get(i).getColor().getValue().getRGB();
                 st.gradientPositions[i] = stops.get(i).getLength().getValue() / 100f;
             }
-        } else if (term instanceof TermFunction tf) {
+        } else if (term instanceof TermFunction) {
+            TermFunction tf = (TermFunction) term;
             st.type = SerialTerm.FUNCTION;
             st.strValue = tf.getFunctionName();
             var values = tf.getValues(true);
             st.args = new ArrayList<>();
             for (var v : values) st.args.add(toSerialTerm(v));
-        } else if (term instanceof TermColor tc) {
+        } else if (term instanceof TermColor) {
+            TermColor tc = (TermColor) term;
             st.type = SerialTerm.COLOR;
             st.colorRgb = tc.getValue().getRGB();
-        } else if (term instanceof TermLength tl) {
+        } else if (term instanceof TermLength) {
+            TermLength tl = (TermLength) term;
             st.type = SerialTerm.LENGTH;
             st.numValue = tl.getValue();
             st.percentage = tl.isPercentage();
             st.unitName = tl.getUnit() != null ? tl.getUnit().toString() : null;
-        } else if (term instanceof TermFloatValue tf) {
+        } else if (term instanceof TermFloatValue) {
+            TermFloatValue tf = (TermFloatValue) term;
             st.type = SerialTerm.FLOAT_VAL;
             st.numValue = tf.getValue();
-        } else if (term instanceof TermURI tu) {
+        } else if (term instanceof TermURI) {
+            TermURI tu = (TermURI) term;
             st.type = SerialTerm.URI;
             st.strValue = tu.getValue();
         } else {
@@ -472,7 +478,8 @@ public class CustomView extends Feature {
                     if (!"root".equals(value)) {
                         parent = parent.findViewById(Utils.getID(value, "id"));
                     }
-                    if (parent instanceof ViewGroup parentView) {
+                    if (parent instanceof ViewGroup) {
+                        ViewGroup parentView = (ViewGroup) parent;
                         var oldParent = (View) view.getParent();
                         if (oldParent.getTag() != "relative") {
                             ((ViewGroup) view.getParent()).removeView(view);
@@ -494,7 +501,8 @@ public class CustomView extends Feature {
                     HashMap<String, String> colors = new HashMap<>();
                     colors.put(IColors.toString(color), IColors.toString(colorNew));
                     replaceColors(view, colors);
-                    if (view instanceof ImageView imageView) {
+                    if (view instanceof ImageView) {
+                        ImageView imageView = (ImageView) view;
                         var drawable = imageView.getDrawable();
                         if (drawable == null) continue;
                         drawable.setTint(colorNew);
@@ -519,11 +527,13 @@ public class CustomView extends Feature {
                     }
                 }
                 case "font-size" -> {
-                    if (!(view instanceof TextView textView)) continue;
+                    if (!(view instanceof TextView)) continue;
+                    TextView textView = (TextView) view;
                     textView.setTextSize(getRealValue(terms.get(0), 0));
                 }
                 case "color" -> {
-                    if (!(view instanceof TextView textView)) continue;
+                    if (!(view instanceof TextView)) continue;
+                    TextView textView = (TextView) view;
                     textView.setTextColor(terms.get(0).colorRgb);
                 }
                 case "alpha", "opacity" -> view.setAlpha(terms.get(0).numValue);
@@ -539,7 +549,8 @@ public class CustomView extends Feature {
                     if (terms.get(0).type == SerialTerm.LENGTH) {
                         var widthTerm = terms.get(0);
                         var heightTerm = terms.get(1);
-                        if (view instanceof ImageView imageView) {
+                        if (view instanceof ImageView) {
+                            ImageView imageView = (ImageView) view;
                             if (widthTerm.percentage || heightTerm.percentage) {
                                 if ((int) widthTerm.numValue == 100 || (int) heightTerm.numValue == 100) {
                                     imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -564,7 +575,8 @@ public class CustomView extends Feature {
                     } else {
                         var value = terms.get(0).strValue.trim();
                         if (value.equals("cover")) {
-                            if (view instanceof ImageView imageView) {
+                            if (view instanceof ImageView) {
+                                ImageView imageView = (ImageView) view;
                                 imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
                             } else {
                                 if (view.getWidth() < 1 || view.getHeight() < 1) {
@@ -637,37 +649,50 @@ public class CustomView extends Feature {
                 }
                 case "left" -> {
                     var lp = view.getLayoutParams();
-                    if (lp instanceof RelativeLayout.LayoutParams rp)
+                    if (lp instanceof RelativeLayout.LayoutParams) {
+                        RelativeLayout.LayoutParams rp = (RelativeLayout.LayoutParams) lp;
                         rp.addRule(RelativeLayout.ALIGN_LEFT, getRealValue(terms.get(0), 0));
-                    else if (lp instanceof ViewGroup.MarginLayoutParams mp)
+                    } else if (lp instanceof ViewGroup.MarginLayoutParams) {
+                        ViewGroup.MarginLayoutParams mp = (ViewGroup.MarginLayoutParams) lp;
                         mp.leftMargin = getRealValue(terms.get(0), 0);
+                    }
                 }
                 case "right" -> {
                     var lp = view.getLayoutParams();
-                    if (lp instanceof RelativeLayout.LayoutParams rp)
+                    if (lp instanceof RelativeLayout.LayoutParams) {
+                        RelativeLayout.LayoutParams rp = (RelativeLayout.LayoutParams) lp;
                         rp.addRule(RelativeLayout.ALIGN_RIGHT, getRealValue(terms.get(0), 0));
-                    else if (lp instanceof ViewGroup.MarginLayoutParams mp)
+                    } else if (lp instanceof ViewGroup.MarginLayoutParams) {
+                        ViewGroup.MarginLayoutParams mp = (ViewGroup.MarginLayoutParams) lp;
                         mp.rightMargin = getRealValue(terms.get(0), 0);
+                    }
                 }
                 case "top" -> {
                     var lp = view.getLayoutParams();
-                    if (lp instanceof RelativeLayout.LayoutParams rp)
+                    if (lp instanceof RelativeLayout.LayoutParams) {
+                        RelativeLayout.LayoutParams rp = (RelativeLayout.LayoutParams) lp;
                         rp.addRule(RelativeLayout.ALIGN_TOP, getRealValue(terms.get(0), 0));
-                    else if (lp instanceof ViewGroup.MarginLayoutParams mp)
+                    } else if (lp instanceof ViewGroup.MarginLayoutParams) {
+                        ViewGroup.MarginLayoutParams mp = (ViewGroup.MarginLayoutParams) lp;
                         mp.topMargin = getRealValue(terms.get(0), 0);
+                    }
                 }
                 case "bottom" -> {
                     var lp = view.getLayoutParams();
-                    if (lp instanceof RelativeLayout.LayoutParams rp)
+                    if (lp instanceof RelativeLayout.LayoutParams) {
+                        RelativeLayout.LayoutParams rp = (RelativeLayout.LayoutParams) lp;
                         rp.addRule(RelativeLayout.ALIGN_BOTTOM, getRealValue(terms.get(0), 0));
-                    else if (lp instanceof ViewGroup.MarginLayoutParams mp)
+                    } else if (lp instanceof ViewGroup.MarginLayoutParams) {
+                        ViewGroup.MarginLayoutParams mp = (ViewGroup.MarginLayoutParams) lp;
                         mp.bottomMargin = getRealValue(terms.get(0), 0);
+                    }
                 }
                 case "color-filter" -> {
                     var mode = terms.get(0).strValue.trim();
                     if (mode.equals("none")) {
-                        if (view instanceof ImageView iv) iv.clearColorFilter();
-                        else {
+                        if (view instanceof ImageView) {
+                            ((ImageView) view).clearColorFilter();
+                        } else {
                             var d = view.getBackground();
                             if (d != null) d.clearColorFilter();
                         }
@@ -675,9 +700,9 @@ public class CustomView extends Feature {
                         if (terms.size() < 2 || terms.get(1).type != SerialTerm.COLOR) continue;
                         try {
                             var pMode = PorterDuff.Mode.valueOf(mode);
-                            if (view instanceof ImageView iv)
-                                iv.setColorFilter(terms.get(1).colorRgb, pMode);
-                            else {
+                            if (view instanceof ImageView) {
+                                ((ImageView) view).setColorFilter(terms.get(1).colorRgb, pMode);
+                            } else {
                                 var d = view.getBackground();
                                 if (d != null) d.setColorFilter(terms.get(1).colorRgb, pMode);
                             }
@@ -687,7 +712,8 @@ public class CustomView extends Feature {
                 }
                 case "color-tint" -> {
                     if (terms.get(0).type == SerialTerm.COLOR) {
-                        if (view instanceof ImageView iv) {
+                        if (view instanceof ImageView) {
+                            ImageView iv = (ImageView) view;
                             ColorStateList csl = terms.size() == 1
                                     ? ColorStateList.valueOf(terms.get(0).colorRgb)
                                     : getColorStateList(terms);
@@ -704,8 +730,9 @@ public class CustomView extends Feature {
                     } else {
                         var value = terms.get(0).strValue.trim();
                         if (value.equals("none")) {
-                            if (view instanceof ImageView iv) iv.setImageTintList(null);
-                            else {
+                            if (view instanceof ImageView) {
+                                ((ImageView) view).setImageTintList(null);
+                            } else {
                                 var d = view.getBackground();
                                 if (d != null) d.setTintList(null);
                             }
@@ -713,7 +740,8 @@ public class CustomView extends Feature {
                     }
                 }
                 case "font-weight" -> {
-                    if (!(view instanceof TextView tv)) continue;
+                    if (!(view instanceof TextView)) continue;
+                    TextView tv = (TextView) view;
                     String value = terms.get(0).strValue;
                     Typeface cur = tv.getTypeface();
                     if ("bold".equals(value) || "700".equals(value) || "800".equals(value) || "900".equals(value))
@@ -722,7 +750,8 @@ public class CustomView extends Feature {
                         tv.setTypeface(Typeface.create(cur, Typeface.NORMAL));
                 }
                 case "font-style" -> {
-                    if (!(view instanceof TextView tv)) continue;
+                    if (!(view instanceof TextView)) continue;
+                    TextView tv = (TextView) view;
                     String value = terms.get(0).strValue;
                     Typeface cur = tv.getTypeface();
                     if ("italic".equals(value)) tv.setTypeface(cur, Typeface.ITALIC);
@@ -730,7 +759,8 @@ public class CustomView extends Feature {
                         tv.setTypeface(Typeface.create(cur, Typeface.NORMAL));
                 }
                 case "text-decoration" -> {
-                    if (!(view instanceof TextView tv)) continue;
+                    if (!(view instanceof TextView)) continue;
+                    TextView tv = (TextView) view;
                     String value = terms.get(0).strValue;
                     if (value.contains("underline"))
                         tv.setPaintFlags(tv.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
@@ -740,7 +770,8 @@ public class CustomView extends Feature {
                         tv.setPaintFlags(tv.getPaintFlags() & (~Paint.UNDERLINE_TEXT_FLAG) & (~Paint.STRIKE_THRU_TEXT_FLAG));
                 }
                 case "text-transform" -> {
-                    if (!(view instanceof TextView tv)) continue;
+                    if (!(view instanceof TextView)) continue;
+                    TextView tv = (TextView) view;
                     switch (terms.get(0).strValue) {
                         case "uppercase" -> tv.setAllCaps(true);
                         case "lowercase" -> {
@@ -751,7 +782,8 @@ public class CustomView extends Feature {
                     }
                 }
                 case "text-align" -> {
-                    if (!(view instanceof TextView tv)) continue;
+                    if (!(view instanceof TextView)) continue;
+                    TextView tv = (TextView) view;
                     switch (terms.get(0).strValue) {
                         case "center" -> tv.setGravity(Gravity.CENTER);
                         case "right", "end" -> tv.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
@@ -790,8 +822,9 @@ public class CustomView extends Feature {
                     }
                 }
                 case "margin" -> {
-                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams params))
+                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams))
                         continue;
+                    ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
                     int l = params.leftMargin, t = params.topMargin,
                             r = params.rightMargin, b = params.bottomMargin;
                     if (terms.size() == 1) {
@@ -809,26 +842,30 @@ public class CustomView extends Feature {
                     view.requestLayout();
                 }
                 case "margin-left" -> {
-                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams p))
+                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams))
                         continue;
+                    ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
                     p.leftMargin = getExactValue(terms.get(0), view.getWidth());
                     view.requestLayout();
                 }
                 case "margin-top" -> {
-                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams p))
+                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams))
                         continue;
+                    ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
                     p.topMargin = getExactValue(terms.get(0), view.getHeight());
                     view.requestLayout();
                 }
                 case "margin-right" -> {
-                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams p))
+                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams))
                         continue;
+                    ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
                     p.rightMargin = getExactValue(terms.get(0), view.getWidth());
                     view.requestLayout();
                 }
                 case "margin-bottom" -> {
-                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams p))
+                    if (!(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams))
                         continue;
+                    ViewGroup.MarginLayoutParams p = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
                     p.bottomMargin = getExactValue(terms.get(0), view.getHeight());
                     view.requestLayout();
                 }
@@ -867,7 +904,8 @@ public class CustomView extends Feature {
     }
 
     private void setHookedDrawable(View view, Drawable draw) {
-        if (view instanceof ImageView imageView) {
+        if (view instanceof ImageView) {
+            ImageView imageView = (ImageView) view;
             forcedDrawableMap.put(view, draw);
             imageView.setImageDrawable(draw);
         } else {
@@ -956,7 +994,8 @@ public class CustomView extends Feature {
                 captureSelector(view, selector, position + 1, resultViews);
             }
         } else {
-            if (!(currentView instanceof ViewGroup viewGroup)) return;
+            if (!(currentView instanceof ViewGroup)) return;
+            ViewGroup viewGroup = (ViewGroup) currentView;
             String typeName = part.typeSelector;
             String pseudo = part.pseudoClass;
             var itemCount = new int[]{0};
@@ -969,7 +1008,8 @@ public class CustomView extends Feature {
                     } else {
                         captureSelector(itemView, selector, position + 1, resultViews);
                     }
-                } else if (isWidgetString(typeName) && itemView instanceof ViewGroup vg) {
+                } else if (isWidgetString(typeName) && itemView instanceof ViewGroup) {
+                    ViewGroup vg = (ViewGroup) itemView;
                     for (int j = 0; j < vg.getChildCount(); j++) {
                         captureSelector(vg.getChildAt(j), selector, position, resultViews);
                     }
@@ -984,7 +1024,10 @@ public class CustomView extends Feature {
             return index != itemCount[0]++;
         } else if (name.startsWith("contains")) {
             String contains = name.substring(name.indexOf('(') + 1, name.indexOf(')'));
-            if (itemView instanceof TextView tv) return !tv.getText().toString().contains(contains);
+            if (itemView instanceof TextView) {
+                TextView tv = (TextView) itemView;
+                return !tv.getText().toString().contains(contains);
+            }
             return !itemView.toString().contains(contains);
         }
         return false;

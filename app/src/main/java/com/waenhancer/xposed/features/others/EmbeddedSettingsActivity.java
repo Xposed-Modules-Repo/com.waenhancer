@@ -8,6 +8,7 @@ import androidx.fragment.app.Fragment;
 
 import com.waenhancer.R;
 import com.waenhancer.utils.FilePicker;
+import com.waenhancer.xposed.utils.ResId;
 
 /**
  * An activity that runs inside the WhatsApp process to host WaEnhancer settings
@@ -19,9 +20,10 @@ public class EmbeddedSettingsActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        ResId.initLocal(this);
         boolean isDark = com.waenhancer.xposed.utils.DesignUtils.isNightMode(this);
         android.util.Log.i("WAE", "EmbeddedSettingsActivity: Setting theme, isDark=" + isDark);
-        setTheme(isDark ? R.style.Theme : R.style.Theme_Light);
+        setTheme((int) (isDark ? ResId.style.Theme : ResId.style.Theme_Light));
         super.onCreate(savedInstanceState);
         host = SettingsViewBuilder.buildHost(this);
         setContentView(host.root);
@@ -66,8 +68,9 @@ public class EmbeddedSettingsActivity extends AppCompatActivity {
 
     private void updateToolbarTitle() {
         Fragment current = getSupportFragmentManager().findFragmentById(host.container.getId());
-        CharSequence title = getString(R.string.app_name);
-        if (current instanceof EmbeddedBasePreferenceFragment embeddedFragment) {
+        CharSequence title = getString(ResId.string.app_name);
+        if (current instanceof EmbeddedBasePreferenceFragment) {
+            EmbeddedBasePreferenceFragment embeddedFragment = (EmbeddedBasePreferenceFragment) current;
             title = embeddedFragment.getToolbarTitle();
         }
         host.titleView.setText(title);

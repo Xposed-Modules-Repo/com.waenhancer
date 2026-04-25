@@ -57,16 +57,30 @@ public class MenuHome extends Feature {
     }
 
     private void InsertOpenWae(Menu menu, Activity activity) {
-        var entryPoint = getSafeString("open_wae", "1");
-        if (!"1".equals(entryPoint)) return;
-        var itemMenu = menu.add(0, 0, 9999, " " + activity.getString(ResId.string.app_name));
-        var iconDraw = DesignUtils.getDrawableByName("ic_settings");
-        iconDraw.setTint(0xff8696a0);
-        itemMenu.setIcon(iconDraw);
-        itemMenu.setOnMenuItemClickListener(item -> {
-            showWaeSettingsDialog(activity);
-            return true;
-        });
+        try {
+            var entryPoint = getSafeString("open_wae", "1");
+            if (!"1".equals(entryPoint)) return;
+
+            int appNameId = ResId.string.app_name;
+            if (appNameId == 0) {
+                // Fallback if ResId is not yet initialized
+                appNameId = activity.getResources().getIdentifier("app_name", "string", activity.getPackageName());
+            }
+
+            String title = (appNameId != 0) ? activity.getString(appNameId) : "WaEnhancer";
+            var itemMenu = menu.add(0, 0, 9999, " " + title);
+            var iconDraw = DesignUtils.getDrawableByName("ic_settings");
+            if (iconDraw != null) {
+                iconDraw.setTint(0xff8696a0);
+                itemMenu.setIcon(iconDraw);
+            }
+            itemMenu.setOnMenuItemClickListener(item -> {
+                showWaeSettingsDialog(activity);
+                return true;
+            });
+        } catch (Throwable t) {
+            XposedBridge.log("[WaEnhancer] Failed to insert menu item: " + t.getMessage());
+        }
     }
 
     /**

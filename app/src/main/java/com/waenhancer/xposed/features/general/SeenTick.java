@@ -75,7 +75,8 @@ public class SeenTick extends Feature {
 
         Drawable clonedDrawable;
 
-        if (originalDrawable instanceof BitmapDrawable bitmapDrawable) {
+        if (originalDrawable instanceof BitmapDrawable) {
+            BitmapDrawable bitmapDrawable = (BitmapDrawable) originalDrawable;
             Bitmap bitmap = bitmapDrawable.getBitmap();
             Bitmap.Config config = bitmap.getConfig() != null ? bitmap.getConfig() : Bitmap.Config.ARGB_8888;
             Bitmap clonedBitmap;

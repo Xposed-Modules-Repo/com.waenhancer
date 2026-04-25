@@ -571,7 +571,8 @@ public final class HookBL {
                         certificateList.addFirst(createLeafCert());
 
                     } else {
-                        if (!(certificates[0] instanceof X509Certificate x509Certificate)) return;
+                        if (!(certificates[0] instanceof X509Certificate)) return;
+                        X509Certificate x509Certificate = (X509Certificate) certificates[0];
 
                         byte[] bytes = x509Certificate.getExtensionValue("1.3.6.1.4.1.11129.2.1.17");
 

@@ -137,8 +137,8 @@ public class GroupAdmin extends Feature {
                     View view = targetObj instanceof View ? (View) targetObj : null;
                     if (view == null && param.args != null) {
                         for (Object arg : param.args) {
-                            if (arg instanceof View v) {
-                                view = v;
+                            if (arg instanceof View) {
+                                view = (View) arg;
                                 break;
                             }
                         }
@@ -281,14 +281,16 @@ public class GroupAdmin extends Feature {
     }
 
     private LinearLayout findNameContainer(@NonNull View root) {
-        if (root instanceof LinearLayout layout) {
+        if (root instanceof LinearLayout) {
+            LinearLayout layout = (LinearLayout) root;
             for (int i = 0; i < layout.getChildCount(); i++) {
                 if (layout.getChildAt(i) instanceof TextView) {
                     return layout;
                 }
             }
         }
-        if (root instanceof ViewGroup vg) {
+        if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
             for (int i = 0; i < vg.getChildCount(); i++) {
                 var child = vg.getChildAt(i);
                 var found = findNameContainer(child);
@@ -307,8 +309,8 @@ public class GroupAdmin extends Feature {
                 try {
                     field.setAccessible(true);
                     Object value = field.get(holder);
-                    if (value instanceof View v) {
-                        return v;
+                    if (value instanceof View) {
+                        return (View) value;
                     }
                 } catch (Throwable ignored) {
                 }

@@ -28,7 +28,8 @@ public class HideSeenView extends Feature {
 
     public static void updateAllBubbleViews() {
         var adapter = ConversationItemListener.getAdapter();
-        if (adapter instanceof CursorAdapter cursorAdapter) {
+        if (adapter instanceof CursorAdapter) {
+            CursorAdapter cursorAdapter = (CursorAdapter) adapter;
             WppCore.getCurrentActivity().runOnUiThread(cursorAdapter::notifyDataSetChanged);
         }
     }

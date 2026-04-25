@@ -207,7 +207,8 @@ public class SeparateGroup extends Feature {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 var string = "";
-                if (param.args[0] instanceof Bundle bundle) {
+                if (param.args[0] instanceof Bundle) {
+                    Bundle bundle = (Bundle) param.args[0];
                     var state = bundle.getParcelable("state");
                     if (state == null) return;
                     string = state.toString();
@@ -372,7 +373,8 @@ public class SeparateGroup extends Feature {
                 field.setAccessible(true);
                 try {
                     var value = field.get(null);
-                    if (!(value instanceof List<?> list)) continue;
+                    if (!(value instanceof List)) continue;
+                    List<?> list = (List<?>) value;
                     if (list.isEmpty() || list.stream().allMatch(item -> item instanceof Number)) {
                         return field;
                     }
@@ -390,8 +392,8 @@ public class SeparateGroup extends Feature {
     @SuppressWarnings("unchecked")
     public static ArrayList<Integer> getArrayListTab(Field listField) throws Exception {
         var list = (List<Integer>) listField.get(null);
-        if (list instanceof ArrayList<Integer> arrayList) {
-            return arrayList;
+        if (list instanceof ArrayList) {
+            return (ArrayList<Integer>) list;
         }
         var tabs = new ArrayList<>(list);
         listField.set(null, tabs);

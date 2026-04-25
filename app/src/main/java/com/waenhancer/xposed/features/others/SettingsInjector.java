@@ -63,7 +63,18 @@ public class SettingsInjector extends Feature {
         Activity activity = Utils.getActivityFromView(recyclerView);
         if (activity == null) return;
 
-        if (hasSettingsMarkers(recyclerView)) {
+        boolean isSettingsScreen = false;
+        try {
+            Class<?> settingsActivityClass = Unobfuscator.loadSettingsActivityClass(classLoader);
+            if (settingsActivityClass != null && settingsActivityClass.isInstance(activity)) {
+                isSettingsScreen = true;
+            }
+        } catch (Throwable t) {
+            // Fallback to markers if Unobfuscator fails
+            isSettingsScreen = hasSettingsMarkers(recyclerView);
+        }
+
+        if (isSettingsScreen) {
             if (!isAlreadyInjected(recyclerView)) {
                 Object adapter = XposedHelpers.callMethod(recyclerView, "getAdapter");
                 if (adapter == null && attempt < 3) {

@@ -79,28 +79,28 @@ public class DesignUtils {
     @NonNull
     public static Drawable createDrawable(String type, int color) {
         switch (type) {
-            case "rc_dialog_bg" -> {
-                var border = Utils.dipToPixels(12.0f);
-                var shapeDrawable = new ShapeDrawable(
+            case "rc_dialog_bg": {
+                float border = Utils.dipToPixels(12.0f);
+                ShapeDrawable shapeDrawable = new ShapeDrawable(
                         new RoundRectShape(new float[] { border, border, border, border, 0, 0, 0, 0 }, null, null));
                 shapeDrawable.getPaint().setColor(color);
                 return shapeDrawable;
             }
-            case "selector_bg" -> {
-                var border = Utils.dipToPixels(18.0f);
+            case "selector_bg": {
+                float border = Utils.dipToPixels(18.0f);
                 ShapeDrawable selectorBg = new ShapeDrawable(new RoundRectShape(
                         new float[] { border, border, border, border, border, border, border, border }, null, null));
                 selectorBg.getPaint().setColor(color);
                 return selectorBg;
             }
-            case "rc_dotline_dialog" -> {
-                var border = Utils.dipToPixels(16.0f);
+            case "rc_dotline_dialog": {
+                float border = Utils.dipToPixels(16.0f);
                 ShapeDrawable shapeDrawable = new ShapeDrawable(new RoundRectShape(
                         new float[] { border, border, border, border, border, border, border, border }, null, null));
                 shapeDrawable.getPaint().setColor(color);
                 return shapeDrawable;
             }
-            case "stroke_border" -> {
+            case "stroke_border": {
                 float radius = Utils.dipToPixels(18.0f);
                 float[] outerRadii = new float[] { radius, radius, radius, radius, radius, radius, radius, radius };
                 RoundRectShape roundRectShape = new RoundRectShape(outerRadii, null, null);
@@ -112,7 +112,6 @@ public class DesignUtils {
                 paint.setColor(color);
                 int inset = Utils.dipToPixels(2);
                 return new InsetDrawable(shapeDrawable, inset, inset, inset, inset);
-
             }
         }
         return new ColorDrawable(Color.BLACK);

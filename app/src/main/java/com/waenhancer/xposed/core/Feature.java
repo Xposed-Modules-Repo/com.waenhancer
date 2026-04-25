@@ -26,7 +26,8 @@ public abstract class Feature {
     public void logDebug(Object object) {
         if (!DEBUG) return;
         log(object);
-        if (object instanceof Throwable th) {
+        if (object instanceof Throwable) {
+            Throwable th = (Throwable) object;
             Log.i("WAE", this.getPluginName() + "-> " + th.getMessage(), th);
         } else {
             Log.i("WAE", this.getPluginName() + "-> " + object);
@@ -36,7 +37,8 @@ public abstract class Feature {
     public void logDebug(String title, Object object) {
         if (!DEBUG) return;
         log(title + ": " + object);
-        if (object instanceof Throwable th) {
+        if (object instanceof Throwable) {
+            Throwable th = (Throwable) object;
             Log.i("WAE", this.getPluginName() + "-> " + title + ": " + th.getMessage(), th);
         } else {
             Log.i("WAE", this.getPluginName() + "-> " + title + ": " + object);

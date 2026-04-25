@@ -97,8 +97,9 @@ public class EmbeddedSettingsDialogFragment extends DialogFragment {
                 @Override
                 public void run() {
                     Fragment current = getChildFragmentManager().findFragmentById(host.container.getId());
-                    CharSequence title = getString(R.string.app_name);
-                    if (current instanceof EmbeddedBasePreferenceFragment embeddedFragment) {
+                    CharSequence title = getString(ResId.string.app_name);
+                    if (current instanceof EmbeddedBasePreferenceFragment) {
+                        EmbeddedBasePreferenceFragment embeddedFragment = (EmbeddedBasePreferenceFragment) current;
                         title = embeddedFragment.getToolbarTitle();
                     }
                     host.titleView.setText(title);

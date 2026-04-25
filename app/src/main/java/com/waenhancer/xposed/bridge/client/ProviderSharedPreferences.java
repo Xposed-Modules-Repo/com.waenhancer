@@ -44,7 +44,9 @@ public class ProviderSharedPreferences implements SharedPreferences {
             // Fallback: try to get any value as string
             try {
                 Object val = localPrefs.getAll().get(key);
-                if (val instanceof Boolean boolVal) return boolVal ? "1" : "0";
+                if (val instanceof Boolean) {
+                    return ((Boolean) val) ? "1" : "0";
+                }
                 return val != null ? String.valueOf(val) : defValue;
             } catch (Exception ignored) {}
             return defValue;
@@ -68,10 +70,10 @@ public class ProviderSharedPreferences implements SharedPreferences {
         } catch (ClassCastException e) {
             try {
                 Object val = localPrefs.getAll().get(key);
-                if (val instanceof Integer intVal) return (float) intVal;
-                if (val instanceof String strVal) return Float.parseFloat(strVal);
-                if (val instanceof Long longVal) return (float) longVal;
-                if (val instanceof Double doubleVal) return (float) doubleVal.doubleValue();
+                if (val instanceof Integer) return ((Integer) val).floatValue();
+                if (val instanceof String) return Float.parseFloat((String) val);
+                if (val instanceof Long) return ((Long) val).floatValue();
+                if (val instanceof Double) return ((Double) val).floatValue();
             } catch (Exception ignored) {}
             return defValue;
         }
@@ -110,45 +112,48 @@ public class ProviderSharedPreferences implements SharedPreferences {
                 return;
             }
             Serializable serializable = result.getSerializable("prefs");
-            if (!(serializable instanceof Map<?, ?> rawMap)) {
+            if (!(serializable instanceof Map)) {
                 return;
             }
+            Map<?, ?> rawMap = (Map<?, ?>) serializable;
             
             android.util.Log.i("WAE", "Hydrating " + rawMap.size() + " preferences from provider");
             var editor = localPrefs.edit().clear();
             for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
-                if (!(entry.getKey() instanceof String key)) {
+                if (!(entry.getKey() instanceof String)) {
                     continue;
                 }
+                String key = (String) entry.getKey();
                 Object value = entry.getValue();
                 
                 // Specific migrations during hydration
-                if ("open_wae".equals(key) && value instanceof Boolean boolVal) {
-                    editor.putString(key, boolVal ? "1" : "0");
+                if ("open_wae".equals(key) && value instanceof Boolean) {
+                    editor.putString(key, ((Boolean) value) ? "1" : "0");
                     continue;
                 }
 
-                if (value instanceof String stringValue) {
-                    editor.putString(key, stringValue);
-                } else if (value instanceof Boolean booleanValue) {
-                    editor.putBoolean(key, booleanValue);
-                } else if (value instanceof Integer intValue) {
-                    editor.putInt(key, intValue);
-                } else if (value instanceof Long longValue) {
-                    editor.putLong(key, longValue);
-                } else if (value instanceof Float floatValue) {
-                    editor.putFloat(key, floatValue);
-                } else if (value instanceof Double doubleValue) {
-                    editor.putFloat(key, (float) doubleValue.doubleValue());
-                } else if (value instanceof Set<?> setValue) {
+                if (value instanceof String) {
+                    editor.putString(key, (String) value);
+                } else if (value instanceof Boolean) {
+                    editor.putBoolean(key, (Boolean) value);
+                } else if (value instanceof Integer) {
+                    editor.putInt(key, (Integer) value);
+                } else if (value instanceof Long) {
+                    editor.putLong(key, (Long) value);
+                } else if (value instanceof Float) {
+                    editor.putFloat(key, (Float) value);
+                } else if (value instanceof Double) {
+                    editor.putFloat(key, ((Double) value).floatValue());
+                } else if (value instanceof Set<?>) {
+                    Set<?> setValue = (Set<?>) value;
                     var strings = new java.util.HashSet<String>();
                     boolean allStrings = true;
                     for (Object item : setValue) {
-                        if (!(item instanceof String stringItem)) {
+                        if (!(item instanceof String)) {
                             allStrings = false;
                             break;
                         }
-                        strings.add(stringItem);
+                        strings.add((String) item);
                     }
                     if (allStrings) {
                         editor.putStringSet(key, strings);
@@ -172,27 +177,27 @@ public class ProviderSharedPreferences implements SharedPreferences {
             try {
                 Bundle extras = new Bundle();
                 extras.putString("key", key);
-                if (value instanceof String stringValue) {
+                if (value instanceof String) {
                     extras.putString("type", "string");
-                    extras.putString("value", stringValue);
-                } else if (value instanceof Boolean booleanValue) {
+                    extras.putString("value", (String) value);
+                } else if (value instanceof Boolean) {
                     extras.putString("type", "boolean");
-                    extras.putBoolean("value", booleanValue);
-                } else if (value instanceof Integer intValue) {
+                    extras.putBoolean("value", (Boolean) value);
+                } else if (value instanceof Integer) {
                     extras.putString("type", "int");
-                    extras.putInt("value", intValue);
-                } else if (value instanceof Long longValue) {
+                    extras.putInt("value", (Integer) value);
+                } else if (value instanceof Long) {
                     extras.putString("type", "long");
-                    extras.putLong("value", longValue);
-                } else if (value instanceof Float floatValue) {
+                    extras.putLong("value", (Long) value);
+                } else if (value instanceof Float) {
                     extras.putString("type", "float");
-                    extras.putFloat("value", floatValue);
-                } else if (value instanceof Set<?> setValue) {
+                    extras.putFloat("value", (Float) value);
+                } else if (value instanceof Set<?>) {
                     extras.putString("type", "string_set");
                     var list = new ArrayList<String>();
-                    for (Object item : setValue) {
-                        if (item instanceof String stringItem) {
-                            list.add(stringItem);
+                    for (Object item : (Set<?>) value) {
+                        if (item instanceof String) {
+                            list.add((String) item);
                         }
                     }
                     extras.putStringArrayList("value", list);

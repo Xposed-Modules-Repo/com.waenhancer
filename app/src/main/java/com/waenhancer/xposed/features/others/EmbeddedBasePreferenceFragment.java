@@ -96,7 +96,8 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
 
     @Override
     public void onDisplayPreferenceDialog(@NonNull Preference preference) {
-        if (preference instanceof androidx.preference.ListPreference listPref) {
+        if (preference instanceof androidx.preference.ListPreference) {
+            androidx.preference.ListPreference listPref = (androidx.preference.ListPreference) preference;
             BottomSheetHelper.showSingleChoice(
                     getContext(),
                     listPref.getDialogTitle() != null ? listPref.getDialogTitle().toString()
@@ -111,7 +112,8 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
                     });
             return;
         }
-        if (preference instanceof androidx.preference.MultiSelectListPreference multiPref) {
+        if (preference instanceof androidx.preference.MultiSelectListPreference) {
+            androidx.preference.MultiSelectListPreference multiPref = (androidx.preference.MultiSelectListPreference) preference;
             BottomSheetHelper.showMultiChoice(
                     getContext(),
                     multiPref.getDialogTitle() != null ? multiPref.getDialogTitle().toString()
@@ -126,7 +128,8 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
                     });
             return;
         }
-        if (preference instanceof androidx.preference.EditTextPreference editPref) {
+        if (preference instanceof androidx.preference.EditTextPreference) {
+            androidx.preference.EditTextPreference editPref = (androidx.preference.EditTextPreference) preference;
             BottomSheetHelper.showInput(
                     getContext(),
                     editPref.getDialogTitle() != null ? editPref.getDialogTitle().toString()
@@ -187,7 +190,8 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
 
     protected void refreshSpecialSummaries() {
         Preference statusRules = findPreference("auto_status_forward_rules_pref");
-        if (statusRules instanceof StatusForwardRulesPreference rulesPreference) {
+        if (statusRules instanceof StatusForwardRulesPreference) {
+            StatusForwardRulesPreference rulesPreference = (StatusForwardRulesPreference) statusRules;
             rulesPreference.refresh();
         }
     }
@@ -196,9 +200,10 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
         try {
             Class<?> clazz = Class.forName(preference.getFragment());
             Object instance = clazz.getDeclaredConstructor().newInstance();
-            if (!(instance instanceof Fragment fragment)) {
+            if (!(instance instanceof Fragment)) {
                 return;
             }
+            Fragment fragment = (Fragment) instance;
             Bundle args = new Bundle();
             args.putAll(preference.getExtras());
             if (preference.getTitle() != null) {
@@ -221,7 +226,7 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
         if (args != null && args.containsKey(ARG_TITLE)) {
             return args.getCharSequence(ARG_TITLE);
         }
-        return getString(R.string.app_name);
+        return getString(ResId.string.app_name);
     }
 
     private void setPreferenceState(String key, boolean enabled) {
@@ -230,7 +235,8 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
             return;
         }
         pref.setEnabled(enabled);
-        if (!enabled && pref instanceof MaterialSwitchPreference switchPreference) {
+        if (!enabled && pref instanceof MaterialSwitchPreference) {
+            MaterialSwitchPreference switchPreference = (MaterialSwitchPreference) pref;
             switchPreference.setChecked(false);
         }
     }
@@ -275,8 +281,8 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
         setPreferenceState("filtergroups", !separategroups);
 
         updateGroupPref("separategroups", isSeparateGroupSupported(),
-                R.string.separate_groups_sum,
-                R.string.separate_groups_unsupported_sum);
+                ResId.string.separate_groups_sum,
+                ResId.string.separate_groups_unsupported_sum);
 
         Preference callBlockContacts = findPreference("call_block_contacts");
         Preference callWhiteContacts = findPreference("call_white_contacts");
@@ -341,7 +347,7 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
     }
 
     protected boolean checkStoragePermission(Object newValue) {
-        if (newValue instanceof Boolean enabled && enabled) {
+        if (newValue instanceof Boolean && (Boolean) newValue) {
             boolean denied =
                     (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager())
                             || (Build.VERSION.SDK_INT < Build.VERSION_CODES.R
