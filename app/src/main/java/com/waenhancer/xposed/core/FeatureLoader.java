@@ -145,6 +145,25 @@ public class FeatureLoader {
                         PackageInfo packageInfo = packageManager.getPackageInfo(mApp.getPackageName(), 0);
                         XposedBridge.log(packageInfo.versionName);
                         currentVersion = packageInfo.versionName;
+
+                        // Diagnostic: Log theme-related preferences from multiple common files
+                        try {
+                            String[] prefFiles = {mApp.getPackageName() + "_preferences", "startup_prefs", "wa_global_prefs"};
+                            XposedBridge.log("[WAE] --- Host Preferences Broad Scan ---");
+                            for (String fileName : prefFiles) {
+                                var sharedPrefs = mApp.getSharedPreferences(fileName, Context.MODE_PRIVATE);
+                                for (var entry : sharedPrefs.getAll().entrySet()) {
+                                    String key = entry.getKey();
+                                    if (key.toLowerCase().contains("theme") || key.toLowerCase().contains("mode")) {
+                                        XposedBridge.log("[WAE] [" + fileName + "] " + key + " = " + entry.getValue());
+                                    }
+                                }
+                            }
+                            XposedBridge.log("[WAE] ------------------------------------");
+                        } catch (Exception e) {
+                            XposedBridge.log("[WAE] Failed to scan host prefs: " + e.getMessage());
+                        }
+
                         supportedVersions = Arrays.asList(mApp.getResources()
                                 .getStringArray(Objects.equals(mApp.getPackageName(), FeatureLoader.PACKAGE_WPP)
                                         ? ResId.array.supported_versions_wpp

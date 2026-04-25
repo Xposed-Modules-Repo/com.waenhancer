@@ -24,7 +24,7 @@
         <attr name="minValue" format="float" />
         <attr name="maxValue" format="float" />
         <attr name="valueSpacing" format="float" />
-        <attr name="format" format="float" />
+        <attr name="format" format="string" />
     </declare-styleable>
 
 

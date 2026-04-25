@@ -31,7 +31,20 @@ public class SharedPreferencesWrapper implements SharedPreferences {
     @Nullable
     @Override
     public String getString(String s, @Nullable String s1) {
-        var value = mPreferences.getString(s, s1);
+        Object value;
+        try {
+            value = mPreferences.getString(s, s1);
+        } catch (ClassCastException e) {
+            try {
+                value = mPreferences.getBoolean(s, false) ? "1" : "0";
+            } catch (Exception ignored) {
+                try {
+                    value = String.valueOf(mPreferences.getAll().get(s));
+                } catch (Exception ignored2) {
+                    value = s1;
+                }
+            }
+        }
         return (String) applyHook(s, value);
     }
 
@@ -59,7 +72,16 @@ public class SharedPreferencesWrapper implements SharedPreferences {
 
     @Override
     public float getFloat(String s, float v) {
-        var value = mPreferences.getFloat(s, v);
+        Object value;
+        try {
+            value = mPreferences.getFloat(s, v);
+        } catch (ClassCastException e) {
+            try {
+                value = (float) mPreferences.getInt(s, (int) v);
+            } catch (Exception ignored) {
+                value = v;
+            }
+        }
         return (float) applyHook(s, value);
     }
 

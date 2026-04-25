@@ -33,6 +33,7 @@ public class SettingsInjector extends Feature {
     @Override
     public void doHook() throws Throwable {
         var entryPoint = getSafeString("open_wae", "1");
+        XposedBridge.log("[WaEnhancer] SettingsInjector: entryPoint is " + entryPoint);
         if (!"2".equals(entryPoint)) return;
 
         // Hook RecyclerView attachment to inject tile into WA's Settings list
@@ -40,8 +41,15 @@ public class SettingsInjector extends Feature {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 View view = (View) param.thisObject;
-                if (view.getClass().getName().contains("RecyclerView")) {
-                    hunterHandler.post(() -> checkAndInject((ViewGroup) view));
+                String className = view.getClass().getName();
+                if (className.contains("RecyclerView")) {
+                    hunterHandler.post(() -> {
+                        try {
+                            checkAndInject((ViewGroup) view);
+                        } catch (Throwable t) {
+                            XposedBridge.log("[WaEnhancer] SettingsInjector post-hook error: " + t.getMessage());
+                        }
+                    });
                 }
             }
         });
@@ -53,8 +61,9 @@ public class SettingsInjector extends Feature {
 
         if (hasSettingsMarkers(recyclerView)) {
             if (!isAlreadyInjected(recyclerView)) {
-                XposedBridge.log("[WaEnhancer] Injecting tile into " + activity.getClass().getSimpleName());
-                injectIntoRecyclerView(recyclerView, activity);
+                XposedBridge.log("[WaEnhancer] SettingsInjector: Detected Settings screen in " + activity.getClass().getSimpleName());
+                boolean success = injectIntoRecyclerView(recyclerView, activity);
+                XposedBridge.log("[WaEnhancer] SettingsInjector: Injection success = " + success);
             }
         }
     }
@@ -81,8 +90,12 @@ public class SettingsInjector extends Feature {
 
     private boolean hasSettingsMarkers(ViewGroup group) {
         int[] count = {0};
-        String[] markers = {"Account", "Privacy", "Storage", "Help", "Settings"};
-        return findMarkersRecursive(group, markers, count);
+        String[] markers = {"Account", "Privacy", "Storage", "Help", "Settings", "Lists", "Chats", "Notifications"};
+        boolean found = findMarkersRecursive(group, markers, count);
+        if (found) {
+            XposedBridge.log("[WaEnhancer] SettingsInjector: Found " + count[0] + " settings markers in " + group.getClass().getSimpleName());
+        }
+        return found;
     }
 
     private boolean findMarkersRecursive(ViewGroup group, String[] markers, int[] count) {
@@ -106,20 +119,35 @@ public class SettingsInjector extends Feature {
     private boolean injectIntoRecyclerView(ViewGroup recyclerView, Activity activity) {
         try {
             Object adapter = XposedHelpers.callMethod(recyclerView, "getAdapter");
-            if (adapter == null) return false;
+            if (adapter == null) {
+                XposedBridge.log("[WaEnhancer] SettingsInjector: Adapter is null for " + recyclerView.getClass().getSimpleName());
+                return false;
+            }
+            XposedBridge.log("[WaEnhancer] SettingsInjector: Adapter class is " + adapter.getClass().getName());
 
             java.lang.reflect.Method addHeaderMethod = null;
             try {
                 addHeaderMethod = Unobfuscator.loadViewAddSearchBarMethod(classLoader);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                XposedBridge.log("[WaEnhancer] SettingsInjector: Failed to load addHeader method: " + e.getMessage());
+            }
 
-            if (addHeaderMethod != null && addHeaderMethod.getDeclaringClass().isAssignableFrom(adapter.getClass())) {
-                View customRow = createCustomRow(activity);
-                XposedHelpers.callMethod(adapter, addHeaderMethod.getName(), customRow);
-                return true;
+            if (addHeaderMethod != null) {
+                XposedBridge.log("[WaEnhancer] SettingsInjector: Found addHeader method: " + addHeaderMethod.getName() + " in " + addHeaderMethod.getDeclaringClass().getName());
+                if (addHeaderMethod.getDeclaringClass().isAssignableFrom(adapter.getClass())) {
+                    View customRow = createCustomRow(activity);
+                    XposedHelpers.callMethod(adapter, addHeaderMethod.getName(), customRow);
+                    XposedBridge.log("[WaEnhancer] SettingsInjector: Successfully called addHeader on adapter");
+                    return true;
+                } else {
+                    XposedBridge.log("[WaEnhancer] SettingsInjector: Adapter " + adapter.getClass().getName() + " is NOT assignable to " + addHeaderMethod.getDeclaringClass().getName());
+                }
+            } else {
+                XposedBridge.log("[WaEnhancer] SettingsInjector: No addHeader method found, cannot inject tile");
             }
         } catch (Exception e) {
-            XposedBridge.log("[WaEnhancer] Tile injection error: " + e.getMessage());
+            XposedBridge.log("[WaEnhancer] SettingsInjector: Tile injection error: " + e.getMessage());
+            e.printStackTrace();
         }
         return false;
     }

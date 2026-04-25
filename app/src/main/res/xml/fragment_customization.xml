@@ -53,32 +53,35 @@
             app:key="wallpaper_file"
             app:title="@string/select_wallpaper" />
 
-        <SeekBarPreference
-            android:defaultValue="60"
-            android:max="100"
+        <com.waenhancer.preference.FloatSeekBarPreference
+            app:defaultValue="60"
             app:dependency="wallpaper"
+            app:format="%.0f%%"
             app:key="wallpaper_alpha"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:title="@string/wallpaper_transparency" />
+            app:maxValue="100"
+            app:minValue="0"
+            app:title="@string/wallpaper_transparency"
+            app:valueSpacing="1" />
 
-        <SeekBarPreference
-            android:defaultValue="75"
-            android:max="100"
+        <com.waenhancer.preference.FloatSeekBarPreference
+            app:defaultValue="75"
             app:dependency="wallpaper"
+            app:format="%.0f%%"
             app:key="wallpaper_alpha_toolbar"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:title="@string/toolbar_transparency" />
+            app:maxValue="100"
+            app:minValue="0"
+            app:title="@string/toolbar_transparency"
+            app:valueSpacing="1" />
 
-        <SeekBarPreference
-            android:defaultValue="15"
-            android:max="100"
+        <com.waenhancer.preference.FloatSeekBarPreference
+            app:defaultValue="15"
             app:dependency="wallpaper"
+            app:format="%.0f%%"
             app:key="wallpaper_alpha_navigation"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:title="@string/navigation_transparency" />
+            app:maxValue="100"
+            app:minValue="0"
+            app:title="@string/navigation_transparency"
+            app:valueSpacing="1" />
 
         <MultiSelectListPreference
             app:entries="@array/tabshide_contents"

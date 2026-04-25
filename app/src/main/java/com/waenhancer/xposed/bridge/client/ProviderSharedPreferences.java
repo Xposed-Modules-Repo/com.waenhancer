@@ -37,7 +37,23 @@ public class ProviderSharedPreferences implements SharedPreferences {
 
     @Nullable
     @Override
-    public String getString(String key, @Nullable String defValue) { return localPrefs.getString(key, defValue); }
+    public String getString(String key, @Nullable String defValue) {
+        try {
+            return localPrefs.getString(key, defValue);
+        } catch (ClassCastException e) {
+            if ("open_wae".equals(key)) {
+                try {
+                    return localPrefs.getBoolean(key, false) ? "1" : "0";
+                } catch (Exception ignored) {}
+            }
+            // Fallback: try to get any value as string
+            try {
+                Object val = localPrefs.getAll().get(key);
+                return val != null ? String.valueOf(val) : defValue;
+            } catch (Exception ignored) {}
+            return defValue;
+        }
+    }
 
     @Nullable
     @Override
@@ -50,7 +66,18 @@ public class ProviderSharedPreferences implements SharedPreferences {
     public long getLong(String key, long defValue) { return localPrefs.getLong(key, defValue); }
 
     @Override
-    public float getFloat(String key, float defValue) { return localPrefs.getFloat(key, defValue); }
+    public float getFloat(String key, float defValue) {
+        try {
+            return localPrefs.getFloat(key, defValue);
+        } catch (ClassCastException e) {
+            if (key != null && key.contains("alpha")) {
+                try {
+                    return (float) localPrefs.getInt(key, (int) defValue);
+                } catch (Exception ignored) {}
+            }
+            return defValue;
+        }
+    }
 
     @Override
     public boolean getBoolean(String key, boolean defValue) { return localPrefs.getBoolean(key, defValue); }
@@ -94,6 +121,17 @@ public class ProviderSharedPreferences implements SharedPreferences {
                     continue;
                 }
                 Object value = entry.getValue();
+                
+                // Specific migrations during hydration
+                if ("open_wae".equals(key) && value instanceof Boolean boolVal) {
+                    editor.putString(key, boolVal ? "1" : "0");
+                    continue;
+                }
+                if (key.contains("alpha") && value instanceof Integer intVal) {
+                    editor.putFloat(key, (float) intVal);
+                    continue;
+                }
+
                 if (value instanceof String stringValue) {
                     editor.putString(key, stringValue);
                 } else if (value instanceof Boolean booleanValue) {
