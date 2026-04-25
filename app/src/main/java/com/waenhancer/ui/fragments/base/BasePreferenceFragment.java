@@ -383,15 +383,17 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         }
 
         // Small delay to ensure preference screen is fully loaded
-        rootView.postDelayed(() -> {
-            var preference = findPreference(preferenceKey);
-            if (preference != null) {
-                scrollToPreference(preference);
-
-                // Highlight the preference for visibility
-                highlightPreference(preference);
-            }
-        }, 100);
+        if (rootView != null) {
+            rootView.postDelayed(() -> {
+                if (!isAdded()) return; // Fragment not attached
+                var preference = findPreference(preferenceKey);
+                if (preference != null) {
+                    scrollToPreference(preference);
+                    // Highlight the preference for visibility
+                    highlightPreference(preference);
+                }
+            }, 100);
+        }
     }
 
     /**
@@ -399,57 +401,65 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
      */
     private void highlightPreference(androidx.preference.Preference preference) {
         var rootView = getView();
-        if (rootView == null) {
-            return;
-        }
+        if (rootView == null || preference == null || preference.getKey() == null) return;
 
-        // Wait longer to ensure RecyclerView has laid out the views after scrolling
+        final String targetKey = preference.getKey();
+
+        // Wait for RecyclerView to lay out items after scroll
         rootView.postDelayed(() -> {
-            androidx.recyclerview.widget.RecyclerView recyclerView = getListView();
-            if (recyclerView == null || preference == null || preference.getKey() == null)
+            if (!isAdded()) return;
+
+            androidx.recyclerview.widget.RecyclerView recyclerView;
+            try {
+                recyclerView = getListView();
+            } catch (IllegalStateException e) {
                 return;
+            }
 
-            // Find the preference view by iterating through visible items
-            String targetKey = preference.getKey();
+            if (recyclerView == null || getPreferenceScreen() == null) return;
+
             boolean found = false;
-
             for (int i = 0; i < recyclerView.getChildCount(); i++) {
                 android.view.View child = recyclerView.getChildAt(i);
-                androidx.recyclerview.widget.RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
+                if (child == null) continue;
 
+                androidx.recyclerview.widget.RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
                 if (holder instanceof androidx.preference.PreferenceViewHolder) {
                     androidx.preference.PreferenceViewHolder prefHolder = (androidx.preference.PreferenceViewHolder) holder;
-
-                    // Try to match by adapter position
                     int position = prefHolder.getBindingAdapterPosition();
+
                     if (position != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
                         try {
-                            // Get all preferences recursively
-                            androidx.preference.Preference pref = findPreferenceAtPosition(getPreferenceScreen(),
-                                    position);
-                            if (pref != null && pref.getKey() != null && pref.getKey().equals(targetKey)) {
+                            androidx.preference.Preference pref = findPreferenceAtPosition(getPreferenceScreen(), position);
+                            if (pref != null && targetKey.equals(pref.getKey())) {
                                 animateHighlight(prefHolder.itemView);
                                 found = true;
                                 break;
                             }
-                        } catch (Exception e) {
-                            // Continue searching
+                        } catch (Exception ignored) {
                         }
                     }
                 }
             }
 
-            // If not found, try a second time after a longer delay
             if (!found) {
-                getView().postDelayed(() -> tryHighlightAgain(targetKey), 500);
+                View currentView = getView();
+                if (currentView != null) {
+                    currentView.postDelayed(() -> tryHighlightAgain(targetKey), 500);
+                }
             }
         }, 500);
     }
 
     private void tryHighlightAgain(String targetKey) {
-        androidx.recyclerview.widget.RecyclerView recyclerView = getListView();
-        if (recyclerView == null)
+        if (!isAdded()) return;
+        androidx.recyclerview.widget.RecyclerView recyclerView;
+        try {
+            recyclerView = getListView();
+        } catch (IllegalStateException e) {
             return;
+        }
+        if (recyclerView == null) return;
 
         for (int i = 0; i < recyclerView.getChildCount(); i++) {
             android.view.View child = recyclerView.getChildAt(i);

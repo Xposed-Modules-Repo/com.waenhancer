@@ -49,7 +49,29 @@ public class FloatSeekBarPreference extends Preference {
 
     @Override
     protected void onSetInitialValue(Object defaultValue) {
-        newValue = getPersistedFloat((defaultValue instanceof Float) ? (Float) defaultValue : this.defaultValue);
+        float def = 0;
+        if (defaultValue instanceof Float) {
+            def = (Float) defaultValue;
+        } else if (defaultValue instanceof String) {
+            try {
+                def = Float.parseFloat((String) defaultValue);
+            } catch (Exception ignored) {}
+        } else {
+            def = this.defaultValue;
+        }
+
+        try {
+            newValue = getPersistedFloat(def);
+        } catch (Exception e) {
+            // If it fails (e.g. ClassCastException), try to get it as an int and convert
+            try {
+                newValue = (float) getPersistedInt((int) def);
+                // Also persist it as float for next time
+                persistFloat(newValue);
+            } catch (Exception e2) {
+                newValue = def;
+            }
+        }
     }
 
     @Override
