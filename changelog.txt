@@ -1,3 +1,8 @@
+[Added]
+- Added Support for WA/WB 2.26.15.xx
+- "WA Enhancer Embedded settings" to main menu
+- Users can now directly switch/install beta channel from the app.
+
 [Fixed]
 - Fixed Home Screen crashing in WA Enhancer General Section
 - Fixed slow scrolling in individual chats
