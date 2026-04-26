@@ -7,7 +7,10 @@ import com.waenhancer.xposed.utils.Utils;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import de.robv.android.xposed.XposedBridge;
@@ -16,20 +19,27 @@ public class MessageStore {
 
 
     private static MessageStore mInstance;
-
     private SQLiteDatabase sqLiteDatabase;
+    private final Map<Long, String> originalKeyCache = Collections.synchronizedMap(new LinkedHashMap<Long, String>(100, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Long, String> eldest) {
+            return size() > 500;
+        }
+    });
 
     private MessageStore() {
         var dataDir = Utils.getApplication().getFilesDir().getParentFile();
         var dbFile = new File(dataDir, "/databases/msgstore.db");
         if (!dbFile.exists()) return;
-        sqLiteDatabase = SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
+        sqLiteDatabase = SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY | SQLiteDatabase.NO_LOCALIZED_COLLATORS);
     }
 
     public static MessageStore getInstance() {
-        synchronized (MessageStore.class) {
-            if (mInstance == null || mInstance.sqLiteDatabase == null || !mInstance.sqLiteDatabase.isOpen()) {
-                mInstance = new MessageStore();
+        if (mInstance == null || mInstance.sqLiteDatabase == null || !mInstance.sqLiteDatabase.isOpen()) {
+            synchronized (MessageStore.class) {
+                if (mInstance == null || mInstance.sqLiteDatabase == null || !mInstance.sqLiteDatabase.isOpen()) {
+                    mInstance = new MessageStore();
+                }
             }
         }
         return mInstance;
@@ -118,11 +128,14 @@ public class MessageStore {
 
     public String getOriginalMessageKey(long id) {
         if (sqLiteDatabase == null) return "";
+        String cached = originalKeyCache.get(id);
+        if (cached != null) return cached;
         String message = "";
-        try (Cursor cursor = sqLiteDatabase.rawQuery("SELECT parent_message_row_id, key_id FROM message_add_on WHERE parent_message_row_id=\"" + id + "\"", null)) {
+        try (Cursor cursor = sqLiteDatabase.query("message_add_on", new String[]{"key_id"}, "parent_message_row_id=?", new String[]{String.valueOf(id)}, null, null, null)) {
             if (cursor.moveToFirst()) {
-                message = cursor.getString(1);
+                message = cursor.getString(0);
             }
+            originalKeyCache.put(id, message);
         } catch (Exception e) {
             XposedBridge.log(e);
         }

@@ -73,18 +73,18 @@ public class HookProvider extends ContentProvider {
                 default:
                     return null;
             }
-            editor.apply();
+            editor.commit();
             return Bundle.EMPTY;
         }
         if ("remove_preference".equals(method) && extras != null) {
             String key = extras.getString("key");
             if (key != null) {
-                prefs.edit().remove(key).apply();
+                prefs.edit().remove(key).commit();
                 return Bundle.EMPTY;
             }
         }
         if ("clear_preferences".equals(method)) {
-            prefs.edit().clear().apply();
+            prefs.edit().clear().commit();
             return Bundle.EMPTY;
         }
         return null;

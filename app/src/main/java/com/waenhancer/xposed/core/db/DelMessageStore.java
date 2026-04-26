@@ -9,9 +9,18 @@ import android.database.sqlite.SQLiteOpenHelper;
 import androidx.annotation.NonNull;
 
 import java.util.HashSet;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class DelMessageStore extends SQLiteOpenHelper {
     private static DelMessageStore mInstance;
+    private final Map<String, Long> timestampCache = Collections.synchronizedMap(new LinkedHashMap<String, Long>(100, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+            return size() > 1000;
+        }
+    });
 
     private static final int DATABASE_VERSION = 10;
     public static final String TABLE_DELETED_FOR_ME = "deleted_for_me";
@@ -21,9 +30,11 @@ public class DelMessageStore extends SQLiteOpenHelper {
     }
 
     public static DelMessageStore getInstance(Context ctx) {
-        synchronized (DelMessageStore.class) {
-            if (mInstance == null || !mInstance.getWritableDatabase().isOpen()) {
-                mInstance = new DelMessageStore(ctx);
+        if (mInstance == null) {
+            synchronized (DelMessageStore.class) {
+                if (mInstance == null) {
+                    mInstance = new DelMessageStore(ctx.getApplicationContext());
+                }
             }
         }
         return mInstance;
@@ -291,12 +302,16 @@ public class DelMessageStore extends SQLiteOpenHelper {
     }
 
     public long getTimestampByMessageId(String msgid) {
+        if (msgid == null) return 0;
+        Long cached = timestampCache.get(msgid);
+        if (cached != null) return cached;
         SQLiteDatabase dbReader = this.getReadableDatabase();
-        try (dbReader;
-                Cursor query = dbReader.query("delmessages", new String[] { "timestamp" }, "msgid=?",
+        try (Cursor query = dbReader.query("delmessages", new String[] { "timestamp" }, "msgid=?",
                         new String[] { msgid }, null, null, null)) {
             if (query.moveToFirst()) {
-                return query.getLong(query.getColumnIndexOrThrow("timestamp"));
+                long ts = query.getLong(query.getColumnIndexOrThrow("timestamp"));
+                timestampCache.put(msgid, ts);
+                return ts;
             }
             return 0;
         }

@@ -946,23 +946,32 @@ public class Unobfuscator {
 
     public synchronized static Field loadConversationDelegateField(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getField(loader, () -> {
+            long start = System.currentTimeMillis();
+            XposedBridge.log("WAE: Scanning for ConversationDelegateField...");
             String[] anchors = {"conversation/createconversation", "conversation/create", "conversation/refresh", "conversation/onCreate"};
             Class<?> conversation = XposedHelpers.findClass("com.whatsapp.Conversation", loader);
             Class<?> conversationFragment = XposedHelpers.findClassIfExists("com.whatsapp.ConversationFragment", loader);
 
             for (String anchor : anchors) {
+                XposedBridge.log("WAE: Trying anchor: " + anchor);
                 Class<?>[] classes = findAllClassUsingStrings(loader, StringMatchType.Contains, anchor);
                 if (classes == null) continue;
 
                 for (Class<?> clazz : classes) {
                     // Try direct field in Conversation
                     Field field = ReflectionUtils.getFieldByExtendType(conversation, clazz);
-                    if (field != null) return field;
+                    if (field != null) {
+                        XposedBridge.log("WAE: Found via Conversation in " + (System.currentTimeMillis() - start) + "ms");
+                        return field;
+                    }
 
                     // Try direct field in ConversationFragment
                     if (conversationFragment != null) {
                         field = ReflectionUtils.getFieldByExtendType(conversationFragment, clazz);
-                        if (field != null) return field;
+                        if (field != null) {
+                            XposedBridge.log("WAE: Found via ConversationFragment in " + (System.currentTimeMillis() - start) + "ms");
+                            return field;
+                        }
                     }
 
                     // Try fields in classes that are fields of Conversation (nested delegate)
@@ -971,7 +980,10 @@ public class Unobfuscator {
                         if (fType.isPrimitive() || fType.getName().startsWith("android.") || fType.getName().startsWith("java."))
                             continue;
                         Field field1 = ReflectionUtils.getFieldByExtendType(fType, clazz);
-                        if (field1 != null) return field1;
+                        if (field1 != null) {
+                            XposedBridge.log("WAE: Found via Conversation nested delegate in " + (System.currentTimeMillis() - start) + "ms");
+                            return field1;
+                        }
                     }
 
                     // Try fields in classes that are fields of ConversationFragment
@@ -992,16 +1004,22 @@ public class Unobfuscator {
 
     public synchronized static Field loadUserJidConversationDelegate(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getField(loader, () -> {
+            long start = System.currentTimeMillis();
+            XposedBridge.log("WAE: Scanning for UserJidConversationDelegate...");
             String[] anchors = {"conversation/createconversation", "conversation/create", "conversation/refresh"};
             Class<?> jidClass = Unobfuscator.findFirstClassUsingName(loader, StringMatchType.EndsWith, "jid.Jid");
 
             for (String anchor : anchors) {
+                XposedBridge.log("WAE: Trying anchor: " + anchor);
                 Class<?>[] classes = findAllClassUsingStrings(loader, StringMatchType.Contains, anchor);
                 if (classes == null) continue;
 
                 for (Class<?> clazz : classes) {
                     Field field = ReflectionUtils.getFieldByExtendType(clazz, jidClass);
-                    if (field != null) return field;
+                    if (field != null) {
+                        XposedBridge.log("WAE: Found UserJidConversationDelegate in " + (System.currentTimeMillis() - start) + "ms");
+                        return field;
+                    }
                 }
             }
             throw new Exception("UserJidConversationDelegate field not found");

@@ -135,7 +135,13 @@ public class WppCore {
         loadWADatabase();
 
         if (!pref.getBoolean("lite_mode", false)) {
-            initBridge(Utils.getApplication());
+            CompletableFuture.runAsync(() -> {
+                try {
+                    initBridge(Utils.getApplication());
+                } catch (Exception e) {
+                    XposedBridge.log(e);
+                }
+            });
         }
 
     }
@@ -410,11 +416,13 @@ public class WppCore {
     public static void loadWADatabase() {
         if (mWaDatabase != null)
             return;
-        var dataDir = Utils.getApplication().getFilesDir().getParentFile();
-        var database = new File(dataDir, "databases/wa.db");
-        if (database.exists()) {
-            mWaDatabase = SQLiteDatabase.openDatabase(database.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
-        }
+        CompletableFuture.runAsync(() -> {
+            var dataDir = Utils.getApplication().getFilesDir().getParentFile();
+            var database = new File(dataDir, "databases/wa.db");
+            if (database.exists()) {
+                mWaDatabase = SQLiteDatabase.openDatabase(database.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+            }
+        });
     }
 
     public static Activity getCurrentActivity() {
@@ -688,20 +696,25 @@ public class WppCore {
         if (conversationDelegateField != null && conversationJidField != null) {
             return;
         }
+        long start = System.currentTimeMillis();
+        XposedBridge.log("WAE: ensureConversationJidResolvers started");
         try {
             if (conversationDelegateField == null) {
                 conversationDelegateField = Unobfuscator.loadConversationDelegateField(loader);
+                XposedBridge.log("WAE: conversationDelegateField found: " + (conversationDelegateField != null));
             }
         } catch (Exception e) {
-            XposedBridge.log(e);
+            XposedBridge.log("WAE: Error loading conversationDelegateField: " + e.getMessage());
         }
         try {
             if (conversationJidField == null) {
                 conversationJidField = Unobfuscator.loadUserJidConversationDelegate(loader);
+                XposedBridge.log("WAE: conversationJidField found: " + (conversationJidField != null));
             }
         } catch (Exception e) {
-            XposedBridge.log(e);
+            XposedBridge.log("WAE: Error loading conversationJidField: " + e.getMessage());
         }
+        XposedBridge.log("WAE: ensureConversationJidResolvers finished in " + (System.currentTimeMillis() - start) + "ms");
     }
 
     @Nullable

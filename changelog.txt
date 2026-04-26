@@ -1,9 +1,6 @@
-[Added]
-- Added Support for WA/WB 2.26.15.xx
-- "WA Enhancer Embedded settings" to main menu
-- UI Improvements
+[Fixed]
+- Fixed Home Screen crashing in WA Enhancer General Section
+- Fixed slow scrolling in individual chats
 
 [Improved]
-- Fixed settings not loading on some devices
-
-If enabled WA Enhancer Embedded settings, then you can update WA Enhancer settings directly from the WhatsApp.
+- Optimized startup performance 

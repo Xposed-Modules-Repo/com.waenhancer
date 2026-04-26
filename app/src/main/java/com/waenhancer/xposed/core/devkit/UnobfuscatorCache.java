@@ -25,10 +25,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -220,16 +223,25 @@ public class UnobfuscatorCache {
         return id < 1 ? "" : mApplication.getResources().getString(id);
     }
 
+    private final Set<String> failedKeys = Collections.synchronizedSet(new HashSet<>());
+
     public Field getField(ClassLoader loader, FunctionCall<Field> functionCall) throws Exception {
         var methodName = getKeyName();
+        if (failedKeys.contains(methodName)) {
+            throw new NoSuchFieldException("Field lookup failed previously in this session: " + methodName);
+        }
         String value = sPrefsCacheHooks.getString(methodName, null);
         if (value == null) {
             try {
                 Field result = functionCall.call();
-                if (result == null) throw new NoSuchFieldException("Field is null");
+                if (result == null) {
+                    failedKeys.add(methodName);
+                    throw new NoSuchFieldException("Field is null");
+                }
                 saveField(methodName, result);
                 return result;
             } catch (Exception e) {
+                failedKeys.add(methodName);
                 throw new Exception("Error getting field " + methodName + ": " + e.getMessage(), e);
             }
         }
@@ -263,14 +275,21 @@ public class UnobfuscatorCache {
 
     public Method getMethod(ClassLoader loader, FunctionCall<Method> functionCall) throws Exception {
         var methodName = getKeyName();
+        if (failedKeys.contains(methodName)) {
+            throw new NoSuchMethodException("Method lookup failed previously in this session: " + methodName);
+        }
         String value = sPrefsCacheHooks.getString(methodName, null);
         if (value == null) {
             try {
                 Method result = functionCall.call();
-                if (result == null) throw new NoSuchMethodException("Method is null");
+                if (result == null) {
+                    failedKeys.add(methodName);
+                    throw new NoSuchMethodException("Method is null");
+                }
                 saveMethod(methodName, result);
                 return result;
             } catch (Exception e) {
+                failedKeys.add(methodName);
                 throw new Exception("Error getting method " + methodName + ": " + e.getMessage(), e);
             }
         }
@@ -317,14 +336,21 @@ public class UnobfuscatorCache {
     }
 
     public Class<?> getClass(ClassLoader loader, String key, FunctionCall<Class<?>> functionCall) throws Exception {
+        if (failedKeys.contains(key)) {
+            throw new ClassNotFoundException("Class lookup failed previously in this session: " + key);
+        }
         String value = sPrefsCacheHooks.getString(key, null);
         if (value == null) {
             try {
                 Class<?> result = functionCall.call();
-                if (result == null) throw new ClassNotFoundException("Class is null");
+                if (result == null) {
+                    failedKeys.add(key);
+                    throw new ClassNotFoundException("Class is null");
+                }
                 saveClass(key, result);
                 return result;
             } catch (Exception e) {
+                failedKeys.add(key);
                 throw new Exception("Error getting class " + key + ": " + e.getMessage(), e);
             }
         }

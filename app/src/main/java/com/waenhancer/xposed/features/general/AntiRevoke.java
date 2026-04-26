@@ -189,6 +189,10 @@ public class AntiRevoke extends Feature {
 
     }
 
+    private static String stringMessageDeleted;
+    private static int antirevokeVal = -1;
+    private static int antirevokeStatusVal = -1;
+
     private void bindRevokedMessageUI(FMessageWpp fMessage, TextView dateTextView, String antirevokeType) {
         if (dateTextView == null)
             return;
@@ -209,9 +213,20 @@ public class AntiRevoke extends Feature {
                         String.format(Utils.getApplication().getString(ResId.string.message_removed_on), date),
                         Toast.LENGTH_LONG));
             }
-            var antirevokeValue = Integer.parseInt(prefs.getString(antirevokeType, "0"));
+
+            if (stringMessageDeleted == null) {
+                stringMessageDeleted = UnobfuscatorCache.getInstance().getString("messagedeleted");
+            }
+            if (antirevokeVal == -1) {
+                antirevokeVal = Integer.parseInt(prefs.getString("antirevoke", "0"));
+            }
+            if (antirevokeStatusVal == -1) {
+                antirevokeStatusVal = Integer.parseInt(prefs.getString("antirevokestatus", "0"));
+            }
+
+            int antirevokeValue = antirevokeType.equals("antirevoke") ? antirevokeVal : antirevokeStatusVal;
             if (antirevokeValue == 1) {
-                var newTextData = UnobfuscatorCache.getInstance().getString("messagedeleted") + " | "
+                var newTextData = stringMessageDeleted + " | "
                         + dateTextView.getText();
                 dateTextView.setText(newTextData);
             } else if (antirevokeValue == 2) {
@@ -221,7 +236,10 @@ public class AntiRevoke extends Feature {
             }
         } else {
             dateTextView.setCompoundDrawables(null, null, null, null);
-            var revokeNotice = UnobfuscatorCache.getInstance().getString("messagedeleted") + " | ";
+            if (stringMessageDeleted == null) {
+                stringMessageDeleted = UnobfuscatorCache.getInstance().getString("messagedeleted");
+            }
+            var revokeNotice = stringMessageDeleted + " | ";
             var dateText = dateTextView.getText().toString();
             if (dateText.contains(revokeNotice)) {
                 dateTextView.setText(dateText.replace(revokeNotice, ""));
