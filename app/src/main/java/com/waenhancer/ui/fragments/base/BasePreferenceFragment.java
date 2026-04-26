@@ -37,10 +37,37 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
     private static final String RELEASES_URL = "https://github.com/mubashardev/WaEnhancer/releases";
     private static final String LATEST_STABLE_URL = "https://github.com/mubashardev/WaEnhancer/releases/latest";
     protected SharedPreferences mPrefs;
+    private boolean suppressRestartBroadcast;
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
-        mPrefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        var localPrefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        mPrefs = new com.waenhancer.preference.SafeSharedPreferences(localPrefs);
+
+        getPreferenceManager().setPreferenceDataStore(new androidx.preference.PreferenceDataStore() {
+            @Override
+            public void putString(String key, @Nullable String value) { mPrefs.edit().putString(key, value).apply(); }
+            @Override
+            @Nullable
+            public String getString(String key, @Nullable String defValue) { return mPrefs.getString(key, defValue); }
+            @Override
+            public void putBoolean(String key, boolean value) { mPrefs.edit().putBoolean(key, value).apply(); }
+            @Override
+            public boolean getBoolean(String key, boolean defValue) { return mPrefs.getBoolean(key, defValue); }
+            @Override
+            public void putInt(String key, int value) { mPrefs.edit().putInt(key, value).apply(); }
+            @Override
+            public int getInt(String key, int defValue) { return mPrefs.getInt(key, defValue); }
+            @Override
+            public void putFloat(String key, float value) { mPrefs.edit().putFloat(key, value).apply(); }
+            @Override
+            public float getFloat(String key, float defValue) { return mPrefs.getFloat(key, defValue); }
+            @Override
+            public void putLong(String key, long value) { mPrefs.edit().putLong(key, value).apply(); }
+            @Override
+            public long getLong(String key, long defValue) { return mPrefs.getLong(key, defValue); }
+        });
+
         mPrefs.registerOnSharedPreferenceChangeListener(this);
         requireActivity().getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -58,7 +85,7 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
             @Nullable Bundle savedInstanceState) {
-        chanceStates(null);
+        runWithoutRestartBroadcast(() -> chanceStates(null));
         monitorPreference();
         return super.onCreateView(inflater, container, savedInstanceState);
     }
@@ -69,6 +96,14 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         setDisplayHomeAsUpEnabled(true);
         initializeReleaseChannelPreference();
         setupReleaseChannelPreference();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (mPrefs != null) {
+            mPrefs.unregisterOnSharedPreferenceChangeListener(this);
+        }
     }
 
     @Override
@@ -128,9 +163,11 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
             String channel = mPrefs.getString("release_channel", "stable");
             WppCore.setPrivString("release_channel", channel);
         }
-        Intent intent = new Intent(BuildConfig.APPLICATION_ID + ".MANUAL_RESTART");
-        App.getInstance().sendBroadcast(intent);
-        chanceStates(s);
+        runWithoutRestartBroadcast(() -> chanceStates(s));
+        if (!suppressRestartBroadcast) {
+            Intent intent = new Intent(BuildConfig.APPLICATION_ID + ".MANUAL_RESTART");
+            App.getInstance().sendBroadcast(intent);
+        }
     }
 
     private void setPreferenceState(String key, boolean enabled) {
@@ -138,8 +175,21 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         if (pref != null) {
             pref.setEnabled(enabled);
             if (pref instanceof MaterialSwitchPreference && !enabled) {
-                ((MaterialSwitchPreference) pref).setChecked(false);
+                var switchPreference = (MaterialSwitchPreference) pref;
+                if (switchPreference.isChecked()) {
+                    runWithoutRestartBroadcast(() -> switchPreference.setChecked(false));
+                }
             }
+        }
+    }
+
+    private void runWithoutRestartBroadcast(@NonNull Runnable runnable) {
+        boolean previous = suppressRestartBroadcast;
+        suppressRestartBroadcast = true;
+        try {
+            runnable.run();
+        } finally {
+            suppressRestartBroadcast = previous;
         }
     }
 
@@ -253,7 +303,10 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         var callBlockContacts = findPreference("call_block_contacts");
         var callWhiteContacts = findPreference("call_white_contacts");
         if (callBlockContacts != null && callWhiteContacts != null) {
-            var callType = Integer.parseInt(mPrefs.getString("call_privacy", "0"));
+            int callType = 0;
+            try {
+                callType = Integer.parseInt(mPrefs.getString("call_privacy", "0"));
+            } catch (Exception ignored) {}
             switch (callType) {
                 case 3:
                     callBlockContacts.setEnabled(true);
@@ -289,7 +342,9 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
             pref.setSummary(supportedSummary);
             return;
         }
-        mPrefs.edit().putBoolean(key, false).apply();
+        if (mPrefs.getBoolean(key, false)) {
+            runWithoutRestartBroadcast(() -> mPrefs.edit().putBoolean(key, false).apply());
+        }
         setPreferenceState(key, false);
         pref.setSummary(unsupportedSummary);
     }
@@ -351,69 +406,89 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         if (preferenceKey == null)
             return;
 
-        // Small delay to ensure preference screen is fully loaded
-        getView().postDelayed(() -> {
-            var preference = findPreference(preferenceKey);
-            if (preference != null) {
-                scrollToPreference(preference);
+        var rootView = getView();
+        if (rootView == null) {
+            return;
+        }
 
-                // Highlight the preference for visibility
-                highlightPreference(preference);
-            }
-        }, 100);
+        // Small delay to ensure preference screen is fully loaded
+        if (rootView != null) {
+            rootView.postDelayed(() -> {
+                if (!isAdded()) return; // Fragment not attached
+                var preference = findPreference(preferenceKey);
+                if (preference != null) {
+                    scrollToPreference(preference);
+                    // Highlight the preference for visibility
+                    highlightPreference(preference);
+                }
+            }, 100);
+        }
     }
 
     /**
      * Highlight a preference with a temporary background color.
      */
     private void highlightPreference(androidx.preference.Preference preference) {
-        // Wait longer to ensure RecyclerView has laid out the views after scrolling
-        getView().postDelayed(() -> {
-            androidx.recyclerview.widget.RecyclerView recyclerView = getListView();
-            if (recyclerView == null || preference == null || preference.getKey() == null)
+        var rootView = getView();
+        if (rootView == null || preference == null || preference.getKey() == null) return;
+
+        final String targetKey = preference.getKey();
+
+        // Wait for RecyclerView to lay out items after scroll
+        rootView.postDelayed(() -> {
+            if (!isAdded()) return;
+
+            androidx.recyclerview.widget.RecyclerView recyclerView;
+            try {
+                recyclerView = getListView();
+            } catch (IllegalStateException e) {
                 return;
+            }
 
-            // Find the preference view by iterating through visible items
-            String targetKey = preference.getKey();
+            if (recyclerView == null || getPreferenceScreen() == null) return;
+
             boolean found = false;
-
             for (int i = 0; i < recyclerView.getChildCount(); i++) {
                 android.view.View child = recyclerView.getChildAt(i);
-                androidx.recyclerview.widget.RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
+                if (child == null) continue;
 
+                androidx.recyclerview.widget.RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(child);
                 if (holder instanceof androidx.preference.PreferenceViewHolder) {
                     androidx.preference.PreferenceViewHolder prefHolder = (androidx.preference.PreferenceViewHolder) holder;
-
-                    // Try to match by adapter position
                     int position = prefHolder.getBindingAdapterPosition();
+
                     if (position != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
                         try {
-                            // Get all preferences recursively
-                            androidx.preference.Preference pref = findPreferenceAtPosition(getPreferenceScreen(),
-                                    position);
-                            if (pref != null && pref.getKey() != null && pref.getKey().equals(targetKey)) {
+                            androidx.preference.Preference pref = findPreferenceAtPosition(getPreferenceScreen(), position);
+                            if (pref != null && targetKey.equals(pref.getKey())) {
                                 animateHighlight(prefHolder.itemView);
                                 found = true;
                                 break;
                             }
-                        } catch (Exception e) {
-                            // Continue searching
+                        } catch (Exception ignored) {
                         }
                     }
                 }
             }
 
-            // If not found, try a second time after a longer delay
             if (!found) {
-                getView().postDelayed(() -> tryHighlightAgain(targetKey), 500);
+                View currentView = getView();
+                if (currentView != null) {
+                    currentView.postDelayed(() -> tryHighlightAgain(targetKey), 500);
+                }
             }
         }, 500);
     }
 
     private void tryHighlightAgain(String targetKey) {
-        androidx.recyclerview.widget.RecyclerView recyclerView = getListView();
-        if (recyclerView == null)
+        if (!isAdded()) return;
+        androidx.recyclerview.widget.RecyclerView recyclerView;
+        try {
+            recyclerView = getListView();
+        } catch (IllegalStateException e) {
             return;
+        }
+        if (recyclerView == null) return;
 
         for (int i = 0; i < recyclerView.getChildCount(); i++) {
             android.view.View child = recyclerView.getChildAt(i);
@@ -529,10 +604,14 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
             boolean installedIsBeta = installedVersion.contains("-beta-");
             String installedChannel = installedIsBeta ? "beta" : "stable";
 
-            if (pref instanceof ListPreference) {
-                ((ListPreference) pref).setValue(installedChannel);
-            }
-            mPrefs.edit().putString("release_channel", installedChannel).apply();
+            runWithoutRestartBroadcast(() -> {
+                if (pref instanceof ListPreference && !installedChannel.equals(((ListPreference) pref).getValue())) {
+                    ((ListPreference) pref).setValue(installedChannel);
+                }
+                if (!installedChannel.equals(mPrefs.getString("release_channel", "stable"))) {
+                    mPrefs.edit().putString("release_channel", installedChannel).apply();
+                }
+            });
             WppCore.setPrivString("release_channel", installedChannel);
         } catch (Exception ignored) {
         }
@@ -577,7 +656,9 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
                 .setTitle(title)
                 .setMessage(message)
                 .setPositiveButton(R.string.download, (dialog, which) -> {
-                    Utils.openLink(requireActivity(), url);
+                    Intent intent = new Intent(requireContext(), com.waenhancer.activities.ChangelogActivity.class);
+                    intent.putExtra(com.waenhancer.activities.ChangelogActivity.EXTRA_TARGET_CHANNEL, selectedChannel);
+                    startActivity(intent);
                     dialog.dismiss();
                 })
                 .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())

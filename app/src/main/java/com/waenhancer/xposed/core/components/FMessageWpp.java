@@ -145,6 +145,19 @@ public class FMessageWpp {
         return fmessage;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        FMessageWpp that = (FMessageWpp) o;
+        return Objects.equals(fmessage, that.fmessage);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(fmessage);
+    }
+
     public String getMessageStr() {
         try {
             var message = (String) messageMethod.invoke(fmessage);
@@ -303,6 +316,19 @@ public class FMessageWpp {
                     ", remoteJid=" + remoteJid +
                     '}';
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Key key = (Key) o;
+            return isFromMe == key.isFromMe && Objects.equals(messageID, key.messageID) && Objects.equals(remoteJid, key.remoteJid);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(messageID, isFromMe, remoteJid);
+        }
     }
 
     public static class UserJid {
@@ -448,6 +474,19 @@ public class FMessageWpp {
                     "PhoneJid=" + phoneJid +
                     ", UserJid=" + userJid +
                     '}';
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            UserJid userJid1 = (UserJid) o;
+            return Objects.equals(getPhoneRawString(), userJid1.getPhoneRawString());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(getPhoneRawString());
         }
     }
 

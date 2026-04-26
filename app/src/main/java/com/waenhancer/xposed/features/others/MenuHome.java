@@ -2,13 +2,14 @@ package com.waenhancer.xposed.features.others;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.view.Menu;
 import android.view.MenuItem;
 
 import androidx.annotation.NonNull;
+import androidx.fragment.app.FragmentActivity;
 
-import com.waenhancer.BuildConfig;
 import com.waenhancer.xposed.core.Feature;
 import com.waenhancer.xposed.core.WppCore;
 import com.waenhancer.xposed.core.components.AlertDialogWpp;
@@ -21,6 +22,7 @@ import java.util.LinkedHashSet;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
+import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
 public class MenuHome extends Feature {
@@ -55,18 +57,68 @@ public class MenuHome extends Feature {
     }
 
     private void InsertOpenWae(Menu menu, Activity activity) {
-        var waeMenu = prefs.getBoolean("open_wae", true);
-        if (!waeMenu) return;
-        var itemMenu = menu.add(0, 0, 9999, " " + activity.getString(ResId.string.app_name));
-        var iconDraw = DesignUtils.getDrawableByName("ic_settings");
-        iconDraw.setTint(0xff8696a0);
-        itemMenu.setIcon(iconDraw);
-        itemMenu.setOnMenuItemClickListener(item -> {
-            Intent intent = activity.getPackageManager().getLaunchIntentForPackage(BuildConfig.APPLICATION_ID);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            var entryPoint = getSafeString("open_wae", "1");
+            if (!"1".equals(entryPoint)) return;
+
+            int appNameId = ResId.string.app_name;
+            if (appNameId == 0) {
+                // Fallback if ResId is not yet initialized
+                appNameId = activity.getResources().getIdentifier("app_name", "string", activity.getPackageName());
+            }
+
+            String title = (appNameId != 0) ? activity.getString(appNameId) : "WaEnhancer";
+            var itemMenu = menu.add(0, 0, 9999, " " + title);
+            var iconDraw = DesignUtils.getDrawableByName("ic_settings");
+            if (iconDraw != null) {
+                iconDraw.setTint(0xff8696a0);
+                itemMenu.setIcon(iconDraw);
+            }
+            itemMenu.setOnMenuItemClickListener(item -> {
+                showWaeSettingsDialog(activity);
+                return true;
+            });
+        } catch (Throwable t) {
+            XposedBridge.log("[WaEnhancer] Failed to insert menu item: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Show WaEnhancer settings as a full-screen dialog that looks like a native
+     * WhatsApp activity. This is the only approach that reliably works from within
+     * an Xposed hook — we cannot launch activities that aren't in the host manifest.
+     */
+    public static void showWaeSettingsDialog(Activity activity) {
+        try {
+            Object fm = null;
+            try {
+                fm = XposedHelpers.callMethod(activity, "getSupportFragmentManager");
+            } catch (Throwable ignored) {}
+
+            if (fm != null) {
+                XposedBridge.log("[WaEnhancer] Showing settings dialog within host process via reflection.");
+                EmbeddedSettingsDialogFragment dialog = new EmbeddedSettingsDialogFragment();
+                try {
+                    XposedHelpers.callMethod(dialog, "show", fm, "wae_embedded_settings_dialog");
+                    return;
+                } catch (Throwable t) {
+                    XposedBridge.log("[WaEnhancer] Failed to show dialog via reflection: " + t.getMessage());
+                }
+            }
+
+            XposedBridge.log("[WaEnhancer] Host activity " + activity.getClass().getName() + " does not support FragmentManager or reflection failed, using activity fallback.");
+            Intent intent = new Intent();
+            intent.setComponent(new ComponentName(com.waenhancer.BuildConfig.APPLICATION_ID,
+                    EmbeddedSettingsActivity.class.getName()));
+            // Only add NEW_TASK if we don't have a valid activity context (though we should have one here)
+            if (!(activity instanceof Activity)) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
             activity.startActivity(intent);
-            return true;
-        });
+        } catch (Throwable t) {
+            XposedBridge.log("[WaEnhancer] Failed to show settings dialog: " + t.getMessage());
+            Utils.showToast("Could not open WaEnhancer Settings", android.widget.Toast.LENGTH_SHORT);
+        }
     }
 
     private void InsertGhostModeOption(Menu menu, Activity activity, boolean newSettings) {

@@ -105,7 +105,8 @@ public class ShowOnline extends Feature {
                     var contactView = (FrameLayout) view.findViewById(Utils.getID("contact_selector", "id"));
                     var firstChild = contactView.getChildAt(0);
                     var isLeftToRight = TextUtilsCompat.getLayoutDirectionFromLocale(Locale.getDefault()) == View.LAYOUT_DIRECTION_LTR;
-                    if (firstChild instanceof ImageView photoView) {
+                    if (firstChild instanceof ImageView) {
+                        ImageView photoView = (ImageView) firstChild;
                         contactView.removeView(photoView);
 
                         var relativeLayout = new RelativeLayout(context);
@@ -128,7 +129,8 @@ public class ShowOnline extends Feature {
                         imageView.setScaleType(ImageView.ScaleType.FIT_XY);
                         imageView.setVisibility(View.INVISIBLE);
                         relativeLayout.addView(imageView);
-                    } else if (firstChild instanceof RelativeLayout relativeLayout) {
+                    } else if (firstChild instanceof RelativeLayout) {
+                        RelativeLayout relativeLayout = (RelativeLayout) firstChild;
                         var photoView = (ImageView) relativeLayout.getChildAt(0);
 
                         var params = new RelativeLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);

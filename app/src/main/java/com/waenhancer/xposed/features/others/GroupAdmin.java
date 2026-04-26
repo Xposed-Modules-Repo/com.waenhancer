@@ -103,7 +103,7 @@ public class GroupAdmin extends Feature {
                     var userJid = fMessage.getUserJid();
                     if (userJid == null || userJid.userJid == null) return;
                     XposedBridge.log("GroupAdmin HOOK: userJid=" + (userJid != null ? userJid.toString() : "null"));
-                    var chatCurrentJid = WppCore.getCurrentUserJid();
+                    var chatCurrentJid = resolveGroupJid(fMessage);
                     if (chatCurrentJid == null || !chatCurrentJid.isGroup()) return;
                     XposedBridge.log("GroupAdmin HOOK: In a group chat, checking admin status...");
 
@@ -125,11 +125,19 @@ public class GroupAdmin extends Feature {
                     }
                     var grpParticipants = field.get(participantOwner);
                     Object jidGrp;
+                    String groupRawJid = chatCurrentJid.getUserRawString();
+                    if (groupRawJid == null) {
+                        groupRawJid = chatCurrentJid.getPhoneRawString();
+                    }
+                    if (groupRawJid == null) {
+                        XposedBridge.log("GroupAdmin HOOK: group raw jid not found");
+                        return;
+                    }
                     if (Modifier.isStatic(jidFactory.getModifiers())) {
-                        jidGrp = jidFactory.invoke(null, chatCurrentJid.getUserRawString());
+                        jidGrp = jidFactory.invoke(null, groupRawJid);
                     } else {
                         Object factoryInstance = XposedHelpers.newInstance(jidFactory.getDeclaringClass());
-                        jidGrp = jidFactory.invoke(factoryInstance, chatCurrentJid.getUserRawString());
+                        jidGrp = jidFactory.invoke(factoryInstance, groupRawJid);
                     }
                     var result = grpcheckAdmin.invoke(grpParticipants, jidGrp, userJid.userJid);
                     XposedBridge.log("GroupAdmin HOOK: isAdmin result=" + result);
@@ -137,8 +145,8 @@ public class GroupAdmin extends Feature {
                     View view = targetObj instanceof View ? (View) targetObj : null;
                     if (view == null && param.args != null) {
                         for (Object arg : param.args) {
-                            if (arg instanceof View v) {
-                                view = v;
+                            if (arg instanceof View) {
+                                view = (View) arg;
                                 break;
                             }
                         }
@@ -281,14 +289,16 @@ public class GroupAdmin extends Feature {
     }
 
     private LinearLayout findNameContainer(@NonNull View root) {
-        if (root instanceof LinearLayout layout) {
+        if (root instanceof LinearLayout) {
+            LinearLayout layout = (LinearLayout) root;
             for (int i = 0; i < layout.getChildCount(); i++) {
                 if (layout.getChildAt(i) instanceof TextView) {
                     return layout;
                 }
             }
         }
-        if (root instanceof ViewGroup vg) {
+        if (root instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) root;
             for (int i = 0; i < vg.getChildCount(); i++) {
                 var child = vg.getChildAt(i);
                 var found = findNameContainer(child);
@@ -307,14 +317,34 @@ public class GroupAdmin extends Feature {
                 try {
                     field.setAccessible(true);
                     Object value = field.get(holder);
-                    if (value instanceof View v) {
-                        return v;
+                    if (value instanceof View) {
+                        return (View) value;
                     }
                 } catch (Throwable ignored) {
                 }
             }
             cursor = cursor.getSuperclass();
         }
+        return null;
+    }
+
+    private FMessageWpp.UserJid resolveGroupJid(@NonNull FMessageWpp fMessage) {
+        try {
+            var key = fMessage.getKey();
+            if (key != null && key.remoteJid != null && key.remoteJid.isGroup()) {
+                return key.remoteJid;
+            }
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            var currentJid = WppCore.getCurrentUserJid();
+            if (currentJid != null && currentJid.isGroup()) {
+                return currentJid;
+            }
+        } catch (Throwable ignored) {
+        }
+
         return null;
     }
 

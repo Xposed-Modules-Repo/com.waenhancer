@@ -297,6 +297,10 @@ public class Others extends Feature {
         var field = ReflectionUtils.getFieldByExtendType(convClass, refreshStatusClass);
         logDebug("disablePhotoProfileStatus", Unobfuscator.getMethodDescriptor(method));
         logDebug("disablePhotoProfileStatus Field", Unobfuscator.getFieldDescriptor(field));
+        if (field == null) {
+            XposedBridge.log("WaEnhancer: disablePhotoProfileStatus skipped because refresh status field was not found");
+            return;
+        }
         XposedBridge.hookMethod(method, new XC_MethodHook() {
             private Object backup;
 
@@ -434,7 +438,8 @@ public class Others extends Feature {
                     var reactionView = (ViewGroup) viewGroup.findViewById(Utils.getID("reactions_bubble_layout", "id"));
                     if (reactionView != null && reactionView.getVisibility() == View.VISIBLE) {
                         for (int i = 0; i < reactionView.getChildCount(); i++) {
-                            if (reactionView.getChildAt(i) instanceof TextView textView) {
+                            if (reactionView.getChildAt(i) instanceof TextView) {
+                                TextView textView = (TextView) reactionView.getChildAt(i);
                                 if (textView.getText().toString().contains(emoji)) {
                                     WppCore.sendReaction("", fMessage.getObject());
                                     return;

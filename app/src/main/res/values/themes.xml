@@ -1,6 +1,6 @@
 <resources>
 
-    <style name="Base.AppTheme.Light" parent="Theme.Material3.DynamicColors.Light.Rikka">
+    <style name="Base.AppTheme.Light" parent="Theme.Material3.Light.Rikka">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowLightStatusBar">false</item>
@@ -8,23 +8,27 @@
         <item name="android:statusBarColor">?colorPrimary</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:textAppearanceListItem">?textAppearanceSubtitle1</item>
         <item name="android:colorAccent">?colorPrimary</item>
         <item name="android:colorControlActivated">?colorPrimary</item>
         <item name="android:windowActivityTransitions">true</item>
         <item name="android:windowEnterTransition">@android:transition/fade</item>
         <item name="android:windowExitTransition">@android:transition/fade</item>
         <item name="toolbarStyle">@style/ModernToolbarStyle</item>
+        <item name="android:textAppearanceListItem">?textAppearanceBodyMedium</item>
+        <item name="android:textAppearanceListItemSmall">?textAppearanceBodySmall</item>
+        <item name="preferenceTheme">@style/Preference.Rikka.Material3</item>
+        <item name="materialSwitchPreferenceStyle">@style/Preference.Rikka.MateriaSwitchPreference</item>
+        <item name="colorPrimary">@color/whatsapp_teal</item>
+        <item name="colorSecondary">@color/whatsapp_teal</item>
         <item name="android:fontFamily">@font/outfit</item>
         <item name="fontFamily">@font/outfit</item>
     </style>
 
     <style name="Theme.Light" parent="Base.AppTheme.Light" />
 
-    <style name="Base.AppTheme" parent="Theme.Material3.DynamicColors.Dark.Rikka">
+    <style name="Base.AppTheme" parent="Theme.Material3.Dark.Rikka">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:textAppearanceListItem">?textAppearanceSubtitle1</item>
         <item name="android:colorAccent">?colorPrimary</item>
         <item name="android:colorControlActivated">?colorPrimary</item>
         <item name="android:statusBarColor">?colorPrimaryContainer</item>
@@ -33,6 +37,12 @@
         <item name="android:windowEnterTransition">@android:transition/fade</item>
         <item name="android:windowExitTransition">@android:transition/fade</item>
         <item name="toolbarStyle">@style/ModernToolbarStyle</item>
+        <item name="android:textAppearanceListItem">?textAppearanceBodyMedium</item>
+        <item name="android:textAppearanceListItemSmall">?textAppearanceBodySmall</item>
+        <item name="preferenceTheme">@style/Preference.Rikka.Material3</item>
+        <item name="materialSwitchPreferenceStyle">@style/Preference.Rikka.MateriaSwitchPreference</item>
+        <item name="colorPrimary">@color/whatsapp_green</item>
+        <item name="colorSecondary">@color/whatsapp_green</item>
         <item name="android:fontFamily">@font/outfit</item>
         <item name="fontFamily">@font/outfit</item>
     </style>

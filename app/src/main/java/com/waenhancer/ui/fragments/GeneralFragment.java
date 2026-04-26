@@ -26,7 +26,7 @@ public class GeneralFragment extends BaseFragment {
         if (getActivity() != null && getActivity().getIntent() != null) {
             String scrollToKey = getActivity().getIntent().getStringExtra("scroll_to_preference");
             if (scrollToKey != null) {
-                getView().postDelayed(() -> {
+                root.postDelayed(() -> {
                     BasePreferenceFragment activeFragment = (BasePreferenceFragment) getChildFragmentManager().findFragmentById(R.id.frag_container);
                     if (activeFragment != null) {
                         activeFragment.scrollToPreference(scrollToKey);

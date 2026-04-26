@@ -606,7 +606,9 @@ public class HomeFragment extends BaseFragment {
                 .setTitle(title)
                 .setMessage(message)
                 .setPositiveButton(R.string.download, (dialog, which) -> {
-                    openUrl(requireContext(), url);
+                    Intent intent = new Intent(requireContext(), ChangelogActivity.class);
+                    intent.putExtra(ChangelogActivity.EXTRA_TARGET_CHANNEL, selectedChannel);
+                    startActivity(intent);
                     dialog.dismiss();
                 })
                 .setNegativeButton(R.string.cancel, (dialog, which) -> dialog.dismiss())
@@ -637,7 +639,8 @@ public class HomeFragment extends BaseFragment {
     private boolean hasRecentModuleHeartbeat() {
         var prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
         long lastSeen = prefs.getLong(PREF_MODULE_HEARTBEAT, 0L);
-        return lastSeen > 0L && (System.currentTimeMillis() - lastSeen) < 6 * 60 * 60 * 1000L;
+        // Expiry threshold: 30 seconds (down from 6 hours) for better accuracy
+        return lastSeen > 0L && (System.currentTimeMillis() - lastSeen) < 30 * 1000L;
     }
 
     private void showClearCacheConfirmation() {
@@ -673,11 +676,8 @@ public class HomeFragment extends BaseFragment {
 
         binding.updateNowBtn.setOnClickListener(v -> {
             animateClick(v);
-            if (pendingUpdateUrl != null && !pendingUpdateUrl.isEmpty()) {
-                UpdateDownloader.showDownloadDialog(requireContext(), pendingUpdateUrl, pendingUpdateVersion);
-            } else {
-                openUrl(requireContext(), RELEASES_URL);
-            }
+            Intent intent = new Intent(requireContext(), ChangelogActivity.class);
+            startActivity(intent);
         });
     }
 
@@ -689,7 +689,9 @@ public class HomeFragment extends BaseFragment {
             this.pendingUpdateUrl = downloadUrl;
             this.pendingUpdateVersion = version;
 
-            binding.updateNotificationTitle.setText(getString(R.string.new_update_available, version));
+            boolean isBeta = tagName != null && tagName.contains("-beta-");
+            int titleResId = isBeta ? R.string.new_beta_update_available : R.string.new_stable_update_available;
+            binding.updateNotificationTitle.setText(getString(titleResId, version));
             binding.updateNotificationChangelog.setText(changelog);
             binding.updateNotificationCard.setVisibility(View.VISIBLE);
             

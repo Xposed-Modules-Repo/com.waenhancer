@@ -79,28 +79,28 @@ public class DesignUtils {
     @NonNull
     public static Drawable createDrawable(String type, int color) {
         switch (type) {
-            case "rc_dialog_bg" -> {
-                var border = Utils.dipToPixels(12.0f);
-                var shapeDrawable = new ShapeDrawable(
+            case "rc_dialog_bg": {
+                float border = Utils.dipToPixels(12.0f);
+                ShapeDrawable shapeDrawable = new ShapeDrawable(
                         new RoundRectShape(new float[] { border, border, border, border, 0, 0, 0, 0 }, null, null));
                 shapeDrawable.getPaint().setColor(color);
                 return shapeDrawable;
             }
-            case "selector_bg" -> {
-                var border = Utils.dipToPixels(18.0f);
+            case "selector_bg": {
+                float border = Utils.dipToPixels(18.0f);
                 ShapeDrawable selectorBg = new ShapeDrawable(new RoundRectShape(
                         new float[] { border, border, border, border, border, border, border, border }, null, null));
                 selectorBg.getPaint().setColor(color);
                 return selectorBg;
             }
-            case "rc_dotline_dialog" -> {
-                var border = Utils.dipToPixels(16.0f);
+            case "rc_dotline_dialog": {
+                float border = Utils.dipToPixels(16.0f);
                 ShapeDrawable shapeDrawable = new ShapeDrawable(new RoundRectShape(
                         new float[] { border, border, border, border, border, border, border, border }, null, null));
                 shapeDrawable.getPaint().setColor(color);
                 return shapeDrawable;
             }
-            case "stroke_border" -> {
+            case "stroke_border": {
                 float radius = Utils.dipToPixels(18.0f);
                 float[] outerRadii = new float[] { radius, radius, radius, radius, radius, radius, radius, radius };
                 RoundRectShape roundRectShape = new RoundRectShape(outerRadii, null, null);
@@ -112,7 +112,6 @@ public class DesignUtils {
                 paint.setColor(color);
                 int inset = Utils.dipToPixels(2);
                 return new InsetDrawable(shapeDrawable, inset, inset, inset, inset);
-
             }
         }
         return new ColorDrawable(Color.BLACK);
@@ -120,45 +119,60 @@ public class DesignUtils {
 
     // Colors
     public static int getPrimaryTextColor() {
-        var textColor = mPrefs.getInt("text_color", 0);
-        if (shouldUseMonetColors()) {
-            var monetTextColor = resolveMonetColor(isNightMode() ? "system_neutral1_100" : "system_neutral1_900");
-            if (monetTextColor != 0) {
-                textColor = monetTextColor;
+        try {
+            if (mPrefs == null) return isNightMode() ? 0xfffffffe : 0xff000001;
+            var textColor = mPrefs.getInt("text_color", 0);
+            if (shouldUseMonetColors()) {
+                var monetTextColor = resolveMonetColor(isNightMode() ? "system_neutral1_100" : "system_neutral1_900");
+                if (monetTextColor != 0) {
+                    textColor = monetTextColor;
+                }
             }
+            if (textColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
+                return DesignUtils.isNightMode() ? 0xfffffffe : 0xff000001;
+            }
+            return textColor;
+        } catch (Throwable t) {
+            return isNightMode() ? 0xfffffffe : 0xff000001;
         }
-        if (textColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
-            return DesignUtils.isNightMode() ? 0xfffffffe : 0xff000001;
-        }
-        return textColor;
     }
 
     public static int getUnSeenColor() {
-        var primaryColor = mPrefs.getInt("primary_color", 0);
-        if (shouldUseMonetColors()) {
-            var monetPrimaryColor = resolveMonetColor(isNightMode() ? "system_accent1_300" : "system_accent1_600");
-            if (monetPrimaryColor != 0) {
-                primaryColor = monetPrimaryColor;
+        try {
+            if (mPrefs == null) return 0xFF25d366;
+            var primaryColor = mPrefs.getInt("primary_color", 0);
+            if (shouldUseMonetColors()) {
+                var monetPrimaryColor = resolveMonetColor(isNightMode() ? "system_accent1_300" : "system_accent1_600");
+                if (monetPrimaryColor != 0) {
+                    primaryColor = monetPrimaryColor;
+                }
             }
-        }
-        if (primaryColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
+            if (primaryColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
+                return 0xFF25d366;
+            }
+            return primaryColor;
+        } catch (Throwable t) {
             return 0xFF25d366;
         }
-        return primaryColor;
     }
 
     public static int getPrimarySurfaceColor() {
-        var backgroundColor = mPrefs.getInt("background_color", 0);
-        if (shouldUseMonetColors()) {
-            var monetBackgroundColor = resolveMonetColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_10");
-            if (monetBackgroundColor != 0) {
-                backgroundColor = monetBackgroundColor;
+        try {
+            if (mPrefs == null) return isNightMode() ? 0xff121212 : 0xfffffffe;
+            var backgroundColor = mPrefs.getInt("background_color", 0);
+            if (shouldUseMonetColors()) {
+                var monetBackgroundColor = resolveMonetColor(isNightMode() ? "system_neutral1_900" : "system_neutral1_10");
+                if (monetBackgroundColor != 0) {
+                    backgroundColor = monetBackgroundColor;
+                }
             }
+            if (backgroundColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
+                return DesignUtils.isNightMode() ? 0xff121212 : 0xfffffffe;
+            }
+            return backgroundColor;
+        } catch (Throwable t) {
+            return isNightMode() ? 0xff121212 : 0xfffffffe;
         }
-        if (backgroundColor == 0 || !mPrefs.getBoolean("changecolor", false)) {
-            return DesignUtils.isNightMode() ? 0xff121212 : 0xfffffffe;
-        }
-        return backgroundColor;
     }
 
     public static Drawable generatePrimaryColorDrawable(Drawable drawable) {
@@ -193,11 +207,43 @@ public class DesignUtils {
     }
 
     public static boolean isNightMode() {
-        return WppCore.getDefaultTheme() <= 0 ? isNightModeBySystem() : WppCore.getDefaultTheme() == 2;
+        return isNightMode(Utils.getApplication());
+    }
+
+    public static boolean isNightMode(android.content.Context context) {
+        try {
+            if (context == null) {
+                boolean systemNight = isNightModeBySystem();
+                int waTheme = Utils.getDefaultTheme();
+                // XposedBridge.log("[WAE] DesignUtils: No context, systemNight=" + systemNight + ", waTheme=" + waTheme);
+                return waTheme <= 0 ? systemNight : waTheme == 2;
+            }
+            
+            // Check context configuration first (most accurate for the current activity)
+            int uiMode = context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
+                return true;
+            }
+            if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_NO) {
+                // If it's explicitly NO, we might still want to check WhatsApp theme
+            }
+
+            // Fallback to WhatsApp preferences
+            int waTheme = Utils.getDefaultTheme();
+            if (waTheme == 2) return true;
+            if (waTheme == 1) return false;
+            
+            // Final fallback: system
+            return isNightModeBySystem();
+        } catch (Throwable t) {
+            return isNightModeBySystem();
+        }
     }
 
     public static boolean isNightModeBySystem() {
-        return (Utils.getApplication().getResources().getConfiguration().uiMode & 48) == 32;
+        android.content.Context context = Utils.getApplication();
+        if (context == null) return false;
+        return (context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
     }
 
     public static void setPrefs(SharedPreferences mPrefs) {
@@ -319,5 +365,55 @@ public class DesignUtils {
         icon.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         icon.draw(canvas);
         return new BitmapDrawable(Utils.getApplication().getResources(), bitmap);
+    }
+
+    public static Drawable getSelectableItemBackground(android.content.Context context) {
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+        return ContextCompat.getDrawable(context, outValue.resourceId);
+    }
+
+    public static int resolveColorAttr(android.content.Context context, int attr) {
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        if (context.getTheme().resolveAttribute(attr, outValue, true)) {
+            if (outValue.type >= android.util.TypedValue.TYPE_FIRST_COLOR_INT && outValue.type <= android.util.TypedValue.TYPE_LAST_COLOR_INT) {
+                return outValue.data;
+            } else {
+                return ContextCompat.getColor(context, outValue.resourceId);
+            }
+        }
+        return 0;
+    }
+
+    public static int getThemeBackgroundColor(android.content.Context context) {
+        int color = resolveColorAttr(context, android.R.attr.windowBackground);
+        if (color == 0) return isNightMode() ? 0xff0b141a : 0xffffffff;
+        return color;
+    }
+
+    public static int getThemeTextColorPrimary(android.content.Context context) {
+        int color = resolveColorAttr(context, android.R.attr.textColorPrimary);
+        if (color == 0) return isNightMode() ? 0xffffffff : 0xff000000;
+        return color;
+    }
+
+    public static int getThemeTextColorSecondary(android.content.Context context) {
+        int color = resolveColorAttr(context, android.R.attr.textColorSecondary);
+        if (color == 0) return isNightMode() ? 0xff8696a0 : 0xff667781;
+        return color;
+    }
+
+    public static int getThemeHeaderColor(android.content.Context context) {
+        // Try to find a header-like color or fallback to windowBackground
+        int color = resolveColorAttr(context, android.R.attr.colorPrimary);
+        if (color == 0) color = resolveColorAttr(context, android.R.attr.background);
+        if (color == 0 || color == -1) return isNightMode() ? 0xff1f2c34 : 0xffffffff;
+        return color;
+    }
+
+    public static int getThemeAccentColor(android.content.Context context) {
+        int color = resolveColorAttr(context, android.R.attr.colorAccent);
+        if (color == 0) return 0xff25d366; // WhatsApp Green
+        return color;
     }
 }

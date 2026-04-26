@@ -138,11 +138,33 @@ public class ReflectionUtils {
 
 
     public static List<Field> getFieldsByExtendType(Class<?> cls, Class<?> type) {
-        return Arrays.stream(cls.getFields()).filter(f -> type.isAssignableFrom(f.getType())).collect(Collectors.toList());
+        List<Field> fields = new ArrayList<>();
+        Class<?> current = cls;
+        while (current != null) {
+            for (Field f : current.getDeclaredFields()) {
+                if (type.isAssignableFrom(f.getType())) {
+                    f.setAccessible(true);
+                    fields.add(f);
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return fields;
     }
 
     public static List<Field> getFieldsByType(Class<?> cls, Class<?> type) {
-        return Arrays.stream(cls.getFields()).filter(f -> type == f.getType()).collect(Collectors.toList());
+        List<Field> fields = new ArrayList<>();
+        Class<?> current = cls;
+        while (current != null) {
+            for (Field f : current.getDeclaredFields()) {
+                if (type == f.getType()) {
+                    f.setAccessible(true);
+                    fields.add(f);
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return fields;
     }
 
     public static Field getFieldByExtendType(Class<?> cls, String className) {
@@ -152,27 +174,28 @@ public class ReflectionUtils {
     }
 
     public static Field getFieldByExtendType(Class<?> cls, Class<?> type) {
-        if (cachePrefs == null) {
-            return Arrays.stream(cls.getFields()).filter(f -> type.isAssignableFrom(f.getType())).findFirst().orElse(null);
-        }
+        if (cls == null || type == null) return null;
 
-        String cacheKey = "field_cache_" + cls.getName() + "_" + type.getName();
-
-        String cachedFieldName = cachePrefs.getString(cacheKey, null);
-        if (cachedFieldName != null) {
-            try {
-                return cls.getField(cachedFieldName);
-            } catch (NoSuchFieldException e) {
-                cachePrefs.edit().remove(cacheKey).commit();
+        if (cachePrefs != null) {
+            String cacheKey = "field_cache_" + cls.getName() + "_" + type.getName();
+            String cachedFieldName = cachePrefs.getString(cacheKey, null);
+            if (cachedFieldName != null) {
+                try {
+                    Field field = XposedHelpers.findField(cls, cachedFieldName);
+                    if (type.isAssignableFrom(field.getType())) {
+                        return field;
+                    }
+                } catch (XposedHelpers.ClassNotFoundError | NoSuchFieldError e) {
+                    cachePrefs.edit().remove(cacheKey).apply();
+                }
             }
         }
 
-        Field field = Arrays.stream(cls.getFields()).filter(f -> type.isAssignableFrom(f.getType())).findFirst().orElse(null);
+        Field field = findFieldUsingFilterIfExists(cls, f -> type.isAssignableFrom(f.getType()));
 
-        if (field != null) {
-            if (field.getDeclaringClass() == cls) {
-                cachePrefs.edit().putString(cacheKey, field.getName()).commit();
-            }
+        if (field != null && cachePrefs != null) {
+            String cacheKey = "field_cache_" + cls.getName() + "_" + type.getName();
+            cachePrefs.edit().putString(cacheKey, field.getName()).apply();
         }
 
         return field;
@@ -186,27 +209,28 @@ public class ReflectionUtils {
 
 
     public static Field getFieldByType(Class<?> cls, Class<?> type) {
-        if (cachePrefs == null) {
-            return Arrays.stream(cls.getFields()).filter(f -> type == f.getType()).findFirst().orElse(null);
-        }
+        if (cls == null || type == null) return null;
 
-        String cacheKey = "field_cache_direct_" + cls.getName() + "_" + type.getName();
-
-        String cachedFieldName = cachePrefs.getString(cacheKey, null);
-        if (cachedFieldName != null) {
-            try {
-                return cls.getField(cachedFieldName);
-            } catch (NoSuchFieldException e) {
-                cachePrefs.edit().remove(cacheKey).apply();
+        if (cachePrefs != null) {
+            String cacheKey = "field_cache_direct_" + cls.getName() + "_" + type.getName();
+            String cachedFieldName = cachePrefs.getString(cacheKey, null);
+            if (cachedFieldName != null) {
+                try {
+                    Field field = XposedHelpers.findField(cls, cachedFieldName);
+                    if (type == field.getType()) {
+                        return field;
+                    }
+                } catch (XposedHelpers.ClassNotFoundError | NoSuchFieldError e) {
+                    cachePrefs.edit().remove(cacheKey).apply();
+                }
             }
         }
 
-        Field field = Arrays.stream(cls.getFields()).filter(f -> type == f.getType()).findFirst().orElse(null);
+        Field field = findFieldUsingFilterIfExists(cls, f -> type == f.getType());
 
-        if (field != null) {
-            if (field.getDeclaringClass() == cls) {
-                cachePrefs.edit().putString(cacheKey, field.getName()).apply();
-            }
+        if (field != null && cachePrefs != null) {
+            String cacheKey = "field_cache_direct_" + cls.getName() + "_" + type.getName();
+            cachePrefs.edit().putString(cacheKey, field.getName()).apply();
         }
 
         return field;

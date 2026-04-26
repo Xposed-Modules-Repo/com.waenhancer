@@ -37,11 +37,13 @@
             app:summary="@string/enable_restart_button_sum"
             app:title="@string/enable_restart_button" />
 
-        <rikka.material.preference.MaterialSwitchPreference
-            app:defaultValue="true"
+        <ListPreference
+            app:defaultValue="1"
+            app:entries="@array/wa_enhancer_entry_point_entries"
+            app:entryValues="@array/wa_enhancer_entry_point_values"
             app:key="open_wae"
-            app:summary="@string/enable_wa_enhancer_button_sum"
-            app:title="@string/enable_wa_enhancer_button" />
+            app:summary="%s"
+            app:title="@string/wa_enhancer_embedded_settings" />
 
         <rikka.material.preference.MaterialSwitchPreference
             app:key="separategroups"

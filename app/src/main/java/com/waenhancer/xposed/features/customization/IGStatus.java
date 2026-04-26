@@ -59,7 +59,8 @@ public class IGStatus extends Feature {
                 if (view == null) return;
                 var list = (ViewGroup) view.findViewById(android.R.id.list);
                 var mStatusContainer = new IGStatusView(WppCore.getCurrentActivity());
-                if (list instanceof ListView listView) {
+                if (list instanceof ListView) {
+                    ListView listView = (ListView) list;
                     listView.setNestedScrollingEnabled(true);
                     var layoutParams = new AbsListView.LayoutParams(AbsListView.LayoutParams.MATCH_PARENT, Utils.dipToPixels(88));
                     mStatusContainer.setLayoutParams(layoutParams);

@@ -29,11 +29,14 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -80,8 +83,7 @@ public class WppCore {
         // Bottom Dialog
         bottomDialog = Unobfuscator.loadDialogViewClass(loader);
 
-        conversationDelegateField = Unobfuscator.loadConversationDelegateField(loader);
-        conversationJidField = Unobfuscator.loadUserJidConversationDelegate(loader);
+        ensureConversationJidResolvers(loader);
 
         // Settings notifications activity (required for
         // ActivityController.EXPORTED_ACTIVITY)
@@ -96,36 +98,7 @@ public class WppCore {
             }
         });
 
-        // ActionUser
-        actionUser = Unobfuscator.loadActionUser(loader);
-        XposedBridge.log("ActionUser: " + actionUser.getName());
-        XposedBridge.hookAllConstructors(actionUser, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                mActionUser = param.thisObject;
-            }
-        });
-
-        // Hook A00 to capture what real 1Ks/0Fq objects look like during a user send
-        var a00Method = ReflectionUtils.findMethodUsingFilterIfExists(actionUser,
-                (method) -> method.getName().equals("A00") && method.getParameterCount() == 2);
-        if (a00Method != null) {
-            XposedBridge.hookMethod(a00Method, new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    Object oneKs = param.args[0];
-                    if (oneKs != null) {
-                        for (var f : oneKs.getClass().getDeclaredFields()) {
-                            f.setAccessible(true);
-                            Object val = f.get(oneKs);
-                            XposedBridge.log("WppCore.A00-hook: 1Ks." + f.getName() + " = " + val
-                                    + " [class=" + (val == null ? "null" : val.getClass().getName()) + "]");
-                        }
-                    }
-                    XposedBridge.log("WppCore.A00-hook: message arg = " + param.args[1]);
-                }
-            });
-        }
+        initActionUser(loader);
 
         // CachedMessageStore
         cachedMessageStoreKey = Unobfuscator.loadCachedMessageStoreKey(loader);
@@ -162,7 +135,13 @@ public class WppCore {
         loadWADatabase();
 
         if (!pref.getBoolean("lite_mode", false)) {
-            initBridge(Utils.getApplication());
+            CompletableFuture.runAsync(() -> {
+                try {
+                    initBridge(Utils.getApplication());
+                } catch (Exception e) {
+                    XposedBridge.log(e);
+                }
+            });
         }
 
     }
@@ -357,10 +336,19 @@ public class WppCore {
 
     public static void sendReaction(String s, Object objMessage) {
         try {
+            if (!ensureActionUserInitialized(objMessage.getClass().getClassLoader()) || actionUser == null) {
+                Utils.showToast("Reaction sending is not supported on this WhatsApp version yet", Toast.LENGTH_SHORT);
+                return;
+            }
             var senderMethod = ReflectionUtils.findMethodUsingFilter(actionUser,
                     (method) -> method.getParameterCount() == 3 && Arrays.equals(method.getParameterTypes(),
                             new Class[]{FMessageWpp.TYPE, String.class, boolean.class}));
-            senderMethod.invoke(getActionUser(), objMessage, s, !TextUtils.isEmpty(s));
+            Object actionUserInstance = Modifier.isStatic(senderMethod.getModifiers()) ? null : getActionUser();
+            if (!Modifier.isStatic(senderMethod.getModifiers()) && actionUserInstance == null) {
+                Utils.showToast("Reaction sending is not supported on this WhatsApp version yet", Toast.LENGTH_SHORT);
+                return;
+            }
+            senderMethod.invoke(actionUserInstance, objMessage, s, !TextUtils.isEmpty(s));
         } catch (Exception e) {
             Utils.showToast("Error in sending reaction:" + e.getMessage(), Toast.LENGTH_SHORT);
             XposedBridge.log(e);
@@ -369,6 +357,9 @@ public class WppCore {
 
     public static Object getActionUser() {
         try {
+            if (actionUser == null) {
+                return null;
+            }
             if (mActionUser == null) {
                 mActionUser = actionUser.getConstructors()[0].newInstance();
             }
@@ -378,14 +369,60 @@ public class WppCore {
         return mActionUser;
     }
 
+    private static void initActionUser(ClassLoader loader) {
+        ensureActionUserInitialized(loader);
+    }
+
+    private static synchronized boolean ensureActionUserInitialized(ClassLoader loader) {
+        if (actionUser != null) {
+            return true;
+        }
+        try {
+            actionUser = Unobfuscator.loadActionUser(loader);
+            XposedBridge.log("ActionUser: " + actionUser.getName());
+            XposedBridge.hookAllConstructors(actionUser, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    mActionUser = param.thisObject;
+                }
+            });
+
+            var a00Method = ReflectionUtils.findMethodUsingFilterIfExists(actionUser,
+                    (method) -> method.getName().equals("A00") && method.getParameterCount() == 2);
+            if (a00Method != null) {
+                XposedBridge.hookMethod(a00Method, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        Object oneKs = param.args[0];
+                        if (oneKs != null) {
+                            for (var f : oneKs.getClass().getDeclaredFields()) {
+                                f.setAccessible(true);
+                                Object val = f.get(oneKs);
+                                XposedBridge.log("WppCore.A00-hook: 1Ks." + f.getName() + " = " + val
+                                        + " [class=" + (val == null ? "null" : val.getClass().getName()) + "]");
+                            }
+                        }
+                        XposedBridge.log("WppCore.A00-hook: message arg = " + param.args[1]);
+                    }
+                });
+            }
+            return true;
+        } catch (Exception e) {
+            XposedBridge.log(e);
+            return false;
+        }
+    }
+
     public static void loadWADatabase() {
         if (mWaDatabase != null)
             return;
-        var dataDir = Utils.getApplication().getFilesDir().getParentFile();
-        var database = new File(dataDir, "databases/wa.db");
-        if (database.exists()) {
-            mWaDatabase = SQLiteDatabase.openDatabase(database.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
-        }
+        CompletableFuture.runAsync(() -> {
+            var dataDir = Utils.getApplication().getFilesDir().getParentFile();
+            var database = new File(dataDir, "databases/wa.db");
+            if (database.exists()) {
+                mWaDatabase = SQLiteDatabase.openDatabase(database.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+            }
+        });
     }
 
     public static Activity getCurrentActivity() {
@@ -440,6 +477,22 @@ public class WppCore {
         return oldClass != null
                 ? oldClass
                 : XposedHelpers.findClass("com.whatsapp.viewonce.ui.messaging.ViewOnceViewerActivity", loader);
+    }
+
+    public synchronized static Class getSettingsActivityClass(@NonNull ClassLoader loader) {
+        try {
+            return Unobfuscator.loadSettingsActivityClass(loader);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public synchronized static Class getSettingsFragmentClass(@NonNull ClassLoader loader) {
+        try {
+            return Unobfuscator.loadSettingsFragmentClass(loader);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public synchronized static Class getAboutActivityClass(@NonNull ClassLoader loader) {
@@ -517,19 +570,6 @@ public class WppCore {
     // return null;
     // }
 
-    public static int getDefaultTheme() {
-        if (mStartUpConfig != null) {
-            var result = ReflectionUtils.findMethodUsingFilterIfExists(mStartUpConfig.getClass(),
-                    (method) -> method.getParameterCount() == 0 && method.getReturnType() == int.class);
-            if (result != null) {
-                var value = ReflectionUtils.callMethod(result, mStartUpConfig);
-                if (value != null)
-                    return (int) value;
-            }
-        }
-        var startup_prefs = Utils.getApplication().getSharedPreferences("startup_prefs", Context.MODE_PRIVATE);
-        return startup_prefs.getInt("night_mode", 0);
-    }
 
     @NonNull
     public static String getContactName(FMessageWpp.UserJid userJid) {
@@ -613,26 +653,195 @@ public class WppCore {
             var conversation = getCurrentConversation();
             if (conversation == null)
                 return new FMessageWpp.UserJid();
-            Object conversationDelegate;
+            ensureConversationJidResolvers(conversation.getClassLoader());
+
+            Object jidObject = resolveJidFromObjectMethods(conversation);
             if (conversation.getClass().getSimpleName().equals("HomeActivity")) {
-                var convFragmentMethod = Unobfuscator.loadHomeConversationFragmentMethod(conversation.getClassLoader());
-                var convFragment = convFragmentMethod.invoke(null, conversation);
-                var convField = Unobfuscator.loadAntiRevokeConvFragmentField(conversation.getClassLoader());
-                conversationDelegate = convField.get(convFragment);
+                try {
+                    var convFragmentMethod = Unobfuscator.loadHomeConversationFragmentMethod(conversation.getClassLoader());
+                    var convFragment = convFragmentMethod.invoke(null, conversation);
+                    if (jidObject == null) {
+                        jidObject = resolveJidFromObjectMethods(convFragment);
+                    }
+                    var convField = Unobfuscator.loadAntiRevokeConvFragmentField(conversation.getClassLoader());
+                    var conversationDelegate = convField.get(convFragment);
+                    if (jidObject == null) {
+                        jidObject = extractJidFromConversationDelegate(conversationDelegate);
+                    }
+                    if (jidObject == null) {
+                        jidObject = findJidObjectInGraph(convFragment);
+                    }
+                } catch (Exception e) {
+                    XposedBridge.log(e);
+                }
             } else {
-                if (conversation.getClass().isAssignableFrom(conversationDelegateField.getDeclaringClass())) {
-                    conversationDelegate = conversationDelegateField.get(conversation);
-                } else {
-                    var fieldObject = ReflectionUtils.getFieldByType(conversation.getClass(),
-                            conversationDelegateField.getDeclaringClass());
-                    conversationDelegate = conversationDelegateField.get(fieldObject.get(conversation));
+                Object conversationDelegate = resolveConversationDelegate(conversation);
+                if (jidObject == null) {
+                    jidObject = extractJidFromConversationDelegate(conversationDelegate);
+                }
+                if (jidObject == null) {
+                    jidObject = findJidObjectInGraph(conversation);
                 }
             }
-            return new FMessageWpp.UserJid(conversationJidField.get(conversationDelegate));
+            if (jidObject == null)
+                return new FMessageWpp.UserJid();
+            return new FMessageWpp.UserJid(jidObject);
         } catch (Exception e) {
             XposedBridge.log(e);
             return new FMessageWpp.UserJid();
         }
+    }
+
+    private static synchronized void ensureConversationJidResolvers(ClassLoader loader) {
+        if (conversationDelegateField != null && conversationJidField != null) {
+            return;
+        }
+        long start = System.currentTimeMillis();
+        XposedBridge.log("WAE: ensureConversationJidResolvers started");
+        try {
+            if (conversationDelegateField == null) {
+                conversationDelegateField = Unobfuscator.loadConversationDelegateField(loader);
+                XposedBridge.log("WAE: conversationDelegateField found: " + (conversationDelegateField != null));
+            }
+        } catch (Exception e) {
+            XposedBridge.log("WAE: Error loading conversationDelegateField: " + e.getMessage());
+        }
+        try {
+            if (conversationJidField == null) {
+                conversationJidField = Unobfuscator.loadUserJidConversationDelegate(loader);
+                XposedBridge.log("WAE: conversationJidField found: " + (conversationJidField != null));
+            }
+        } catch (Exception e) {
+            XposedBridge.log("WAE: Error loading conversationJidField: " + e.getMessage());
+        }
+        XposedBridge.log("WAE: ensureConversationJidResolvers finished in " + (System.currentTimeMillis() - start) + "ms");
+    }
+
+    @Nullable
+    private static Object resolveConversationDelegate(@NonNull Activity conversation) {
+        try {
+            if (conversationDelegateField == null) {
+                return null;
+            }
+            if (conversationDelegateField.getDeclaringClass().isAssignableFrom(conversation.getClass())) {
+                return conversationDelegateField.get(conversation);
+            }
+            var fieldObject = ReflectionUtils.getFieldByType(conversation.getClass(),
+                    conversationDelegateField.getDeclaringClass());
+            if (fieldObject != null) {
+                return conversationDelegateField.get(fieldObject.get(conversation));
+            }
+        } catch (Exception e) {
+            XposedBridge.log(e);
+        }
+        return null;
+    }
+
+    @Nullable
+    private static Object extractJidFromConversationDelegate(@Nullable Object conversationDelegate) {
+        if (conversationDelegate == null) {
+            return null;
+        }
+        Object jid = resolveJidFromObjectMethods(conversationDelegate);
+        if (jid != null) {
+            return jid;
+        }
+        try {
+            if (conversationJidField != null) {
+                jid = conversationJidField.get(conversationDelegate);
+                if (jid != null) {
+                    return jid;
+                }
+            }
+        } catch (Exception e) {
+            XposedBridge.log(e);
+        }
+        return findJidObjectInGraph(conversationDelegate);
+    }
+
+    @Nullable
+    private static Object resolveJidFromObjectMethods(@Nullable Object target) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            for (Method method : target.getClass().getDeclaredMethods()) {
+                if (Modifier.isStatic(method.getModifiers()) || method.getParameterCount() != 0) {
+                    continue;
+                }
+                if (!isJidClass(method.getReturnType())) {
+                    continue;
+                }
+                try {
+                    method.setAccessible(true);
+                    Object result = method.invoke(target);
+                    if (isJidObject(result)) {
+                        return result;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    @Nullable
+    private static Object findJidObjectInGraph(@Nullable Object root) {
+        return findJidObjectInGraph(root, 2, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    @Nullable
+    private static Object findJidObjectInGraph(@Nullable Object root, int depth, Set<Object> visited) {
+        if (root == null || depth < 0 || visited.contains(root)) {
+            return null;
+        }
+        visited.add(root);
+
+        if (isJidObject(root)) {
+            return root;
+        }
+
+        for (Field field : ReflectionUtils.findAllFieldsUsingFilter(root.getClass(), f -> {
+            int modifiers = f.getModifiers();
+            if (Modifier.isStatic(modifiers) || f.getType().isPrimitive()) {
+                return false;
+            }
+            String name = f.getType().getName();
+            return !name.startsWith("java.") && !name.startsWith("android.");
+        })) {
+            try {
+                Object value = field.get(root);
+                if (value == null) {
+                    continue;
+                }
+                if (isJidObject(value)) {
+                    return value;
+                }
+                Object nested = findJidObjectInGraph(value, depth - 1, visited);
+                if (nested != null) {
+                    return nested;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private static boolean isJidObject(@Nullable Object value) {
+        if (value == null) {
+            return false;
+        }
+        return isJidClass(value.getClass());
+    }
+
+    private static boolean isJidClass(@Nullable Class<?> type) {
+        if (type == null) {
+            return false;
+        }
+        return (FMessageWpp.UserJid.TYPE_USERJID != null && FMessageWpp.UserJid.TYPE_USERJID.isAssignableFrom(type))
+                || (FMessageWpp.UserJid.TYPE_PHONEUSERJID != null && FMessageWpp.UserJid.TYPE_PHONEUSERJID.isAssignableFrom(type))
+                || (FMessageWpp.UserJid.TYPE_JID != null && FMessageWpp.UserJid.TYPE_JID.isAssignableFrom(type));
     }
 
     public static String stripJID(String str) {
@@ -803,6 +1012,7 @@ public class WppCore {
         if (privPrefs == null) return;
         privPrefs.edit().putBoolean(key, value).commit();
     }
+
 
     public static boolean getPrivBoolean(String key, boolean defaultValue) {
         if (privPrefs == null) return defaultValue;

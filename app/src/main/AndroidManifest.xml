@@ -32,7 +32,7 @@
 
     <queries>
         <package android:name="com.whatsapp" />
-        <package android:name="com.whatsapp.w4b" />
+        <!-- <package android:name="com.whatsapp.w4b" /> -->
     </queries>
 
     <application
@@ -65,6 +65,13 @@
             android:name=".provider.DeletedMessagesProvider"
             android:authorities="${applicationId}.provider"
             android:exported="true" />
+
+        <activity
+            android:name=".xposed.features.others.EmbeddedSettingsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.whatsapp"
+            android:theme="@style/Theme.AppCompat.DayNight" />
 
         <activity
             android:name=".activities.MainActivity"

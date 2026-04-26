@@ -198,6 +198,8 @@ public class Unobfuscator {
     }
 
     public synchronized static String getFieldDescriptor(Field field) {
+        if (field == null)
+            return null;
         return field.getDeclaringClass().getName() + "->" + field.getName() + ":" + field.getType().getName();
     }
 
@@ -904,7 +906,10 @@ public class Unobfuscator {
     public synchronized static Method loadHomeConversationFragmentMethod(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getMethod(loader, () -> {
             var homeClass = WppCore.getHomeActivityClass(loader);
-            var convFragment = XposedHelpers.findClass("com.whatsapp.ConversationFragment", loader);
+            var convFragment = XposedHelpers.findClassIfExists("com.whatsapp.ConversationFragment", loader);
+            if (convFragment == null) {
+                throw new ClassNotFoundException("com.whatsapp.ConversationFragment");
+            }
             MethodData method = dexkit.findMethod(FindMethod.create()
                     .searchInClass(
                             Collections.singletonList(
@@ -918,25 +923,80 @@ public class Unobfuscator {
 
     public synchronized static Field loadAntiRevokeConvFragmentField(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getField(loader, () -> {
-            Class<?> chatClass = findFirstClassUsingStrings(loader, StringMatchType.Contains, "conversation/createconversation");
-            Class<?> conversation = XposedHelpers.findClass("com.whatsapp.ConversationFragment", loader);
-            Field field = ReflectionUtils.getFieldByType(conversation, chatClass);
-            if (field == null) throw new Exception("AntiRevokeConvChat field not found");
-            return field;
+            String[] anchors = {"conversation/createconversation", "conversation/create", "conversation/refresh"};
+            Class<?> conversation = XposedHelpers.findClassIfExists("com.whatsapp.ConversationFragment", loader);
+            if (conversation == null) {
+                throw new ClassNotFoundException("com.whatsapp.ConversationFragment");
+            }
+
+            for (String anchor : anchors) {
+                Class<?>[] classes = findAllClassUsingStrings(loader, StringMatchType.Contains, anchor);
+                if (classes == null) continue;
+
+                for (Class<?> clazz : classes) {
+                    Field field = ReflectionUtils.getFieldByType(conversation, clazz);
+                    if (field != null) return field;
+                    field = ReflectionUtils.getFieldByExtendType(conversation, clazz);
+                    if (field != null) return field;
+                }
+            }
+            throw new Exception("AntiRevokeConvChat field not found");
         });
     }
 
     public synchronized static Field loadConversationDelegateField(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getField(loader, () -> {
-            Class<?> conversationDelegateClass = findFirstClassUsingStrings(loader, StringMatchType.Contains, "conversation/createconversation");
+            long start = System.currentTimeMillis();
+            XposedBridge.log("WAE: Scanning for ConversationDelegateField...");
+            String[] anchors = {"conversation/createconversation", "conversation/create", "conversation/refresh", "conversation/onCreate"};
             Class<?> conversation = XposedHelpers.findClass("com.whatsapp.Conversation", loader);
-            Field field = ReflectionUtils.getFieldByExtendType(conversation, conversationDelegateClass);
-            if (field != null) return field;
-            for (var f : conversation.getDeclaredFields()) {
-                var clazz = f.getType();
-                if (clazz.isPrimitive()) continue;
-                var field1 = ReflectionUtils.getFieldByExtendType(clazz, conversationDelegateClass);
-                if (field1 != null) return field1;
+            Class<?> conversationFragment = XposedHelpers.findClassIfExists("com.whatsapp.ConversationFragment", loader);
+
+            for (String anchor : anchors) {
+                XposedBridge.log("WAE: Trying anchor: " + anchor);
+                Class<?>[] classes = findAllClassUsingStrings(loader, StringMatchType.Contains, anchor);
+                if (classes == null) continue;
+
+                for (Class<?> clazz : classes) {
+                    // Try direct field in Conversation
+                    Field field = ReflectionUtils.getFieldByExtendType(conversation, clazz);
+                    if (field != null) {
+                        XposedBridge.log("WAE: Found via Conversation in " + (System.currentTimeMillis() - start) + "ms");
+                        return field;
+                    }
+
+                    // Try direct field in ConversationFragment
+                    if (conversationFragment != null) {
+                        field = ReflectionUtils.getFieldByExtendType(conversationFragment, clazz);
+                        if (field != null) {
+                            XposedBridge.log("WAE: Found via ConversationFragment in " + (System.currentTimeMillis() - start) + "ms");
+                            return field;
+                        }
+                    }
+
+                    // Try fields in classes that are fields of Conversation (nested delegate)
+                    for (Field f : conversation.getDeclaredFields()) {
+                        Class<?> fType = f.getType();
+                        if (fType.isPrimitive() || fType.getName().startsWith("android.") || fType.getName().startsWith("java."))
+                            continue;
+                        Field field1 = ReflectionUtils.getFieldByExtendType(fType, clazz);
+                        if (field1 != null) {
+                            XposedBridge.log("WAE: Found via Conversation nested delegate in " + (System.currentTimeMillis() - start) + "ms");
+                            return field1;
+                        }
+                    }
+
+                    // Try fields in classes that are fields of ConversationFragment
+                    if (conversationFragment != null) {
+                        for (Field f : conversationFragment.getDeclaredFields()) {
+                            Class<?> fType = f.getType();
+                            if (fType.isPrimitive() || fType.getName().startsWith("android.") || fType.getName().startsWith("java."))
+                                continue;
+                            Field field1 = ReflectionUtils.getFieldByExtendType(fType, clazz);
+                            if (field1 != null) return field1;
+                        }
+                    }
+                }
             }
             return null;
         });
@@ -944,11 +1004,25 @@ public class Unobfuscator {
 
     public synchronized static Field loadUserJidConversationDelegate(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getField(loader, () -> {
-            Class<?> chatClass = findFirstClassUsingStrings(loader, StringMatchType.Contains, "conversation/createconversation");
+            long start = System.currentTimeMillis();
+            XposedBridge.log("WAE: Scanning for UserJidConversationDelegate...");
+            String[] anchors = {"conversation/createconversation", "conversation/create", "conversation/refresh"};
             Class<?> jidClass = Unobfuscator.findFirstClassUsingName(loader, StringMatchType.EndsWith, "jid.Jid");
-            Field field = ReflectionUtils.getFieldByExtendType(chatClass, jidClass);
-            if (field == null) throw new Exception("UserJidConversationDelegate field not found");
-            return field;
+
+            for (String anchor : anchors) {
+                XposedBridge.log("WAE: Trying anchor: " + anchor);
+                Class<?>[] classes = findAllClassUsingStrings(loader, StringMatchType.Contains, anchor);
+                if (classes == null) continue;
+
+                for (Class<?> clazz : classes) {
+                    Field field = ReflectionUtils.getFieldByExtendType(clazz, jidClass);
+                    if (field != null) {
+                        XposedBridge.log("WAE: Found UserJidConversationDelegate in " + (System.currentTimeMillis() - start) + "ms");
+                        return field;
+                    }
+                }
+            }
+            throw new Exception("UserJidConversationDelegate field not found");
         });
     }
 
@@ -1956,17 +2030,32 @@ public class Unobfuscator {
 
     public synchronized static Class loadActionUser(ClassLoader loader) throws Exception {
         return UnobfuscatorCache.getInstance().getClass(loader, () -> {
-            var classData = dexkit.getClassData("com.whatsapp.conversation.selection.SingleSelectedMessageActivity");
-            if (classData == null)
-                throw new RuntimeException("SingleSelectedMessage class not found");
-            var fields = classData.getFields().stream().map(FieldData::getType).collect(Collectors.toList());
             var fmessage = loadFMessageClass(loader);
-            var classResult = dexkit
-                    .findClass(FindClass.create().searchIn(fields).matcher(ClassMatcher.create().addMethod(
-                            MethodMatcher.create().paramCount(3).paramTypes(fmessage, String.class, boolean.class))));
-            if (classResult.isEmpty())
-                throw new RuntimeException("ActionUser class not found");
-            return classResult.get(0).getInstance(loader);
+            var classData = dexkit.getClassData("com.whatsapp.conversation.selection.SingleSelectedMessageActivity");
+            if (classData != null) {
+                var fields = classData.getFields().stream().map(FieldData::getType).collect(Collectors.toList());
+                var classResult = dexkit.findClass(FindClass.create().searchIn(fields).matcher(ClassMatcher.create()
+                        .addMethod(MethodMatcher.create().paramCount(3)
+                                .paramTypes(fmessage, String.class, boolean.class))));
+                if (!classResult.isEmpty()) {
+                    return classResult.get(0).getInstance(loader);
+                }
+            }
+
+            var methods = dexkit.findMethod(FindMethod.create().matcher(MethodMatcher.create()
+                    .paramCount(3)
+                    .paramTypes(fmessage, String.class, boolean.class)));
+            for (var methodData : methods) {
+                if (!methodData.isMethod()) continue;
+                try {
+                    var method = methodData.getMethodInstance(loader);
+                    if (Modifier.isAbstract(method.getModifiers())) continue;
+                    return method.getDeclaringClass();
+                } catch (Throwable ignored) {
+                }
+            }
+
+            throw new RuntimeException("ActionUser class not found");
         });
     }
 
@@ -3012,5 +3101,84 @@ public class Unobfuscator {
 
     public static Class<?> loadDialerProfilePictureLoader(ClassLoader classLoader) throws Exception {
         return UnobfuscatorCache.getInstance().getClass(classLoader, () -> findFirstClassUsingStrings(classLoader, StringMatchType.Contains, "DialerProfilePictureLoader/syncFetchProfilePhoto/onPhotoReceived"));
+    }
+
+    public synchronized static Class loadSettingsActivityClass(ClassLoader loader) throws Exception {
+        return UnobfuscatorCache.getInstance().getClass(loader, "SettingsActivity", () -> {
+            String[] settingsIdentifiers = {
+                "help_center_url", 
+                "setting_help", 
+                "settings_privacy", 
+                "settings_account",
+                "privacy_checkup",
+                "lists_settings",
+                "settings_chat",
+                "settings_notifications",
+                "settings_data_usage"
+            };
+            
+            for (String identifier : settingsIdentifiers) {
+                try {
+                    Class<?> clazz = findFirstClassUsingStrings(loader, StringMatchType.Contains, identifier);
+                    if (clazz != null && android.app.Activity.class.isAssignableFrom(clazz)) {
+                        return clazz;
+                    }
+                } catch (Exception ignored) {}
+            }
+            
+            // Explicit common names
+            String[] names = {
+                "com.whatsapp.settings.Settings",
+                "com.whatsapp.settings.SettingsActivity",
+                "com.whatsapp.settings.ui.SettingsActivity",
+                "com.whatsapp.home.ui.SettingsActivity",
+                "com.whatsapp.Settings"
+            };
+            
+            for (String name : names) {
+                Class<?> clazz = XposedHelpers.findClassIfExists(name, loader);
+                if (clazz != null) return clazz;
+            }
+            
+            throw new ClassNotFoundException("SettingsActivity class not found after exhaustive search");
+        });
+    }
+
+    public synchronized static Class loadSettingsFragmentClass(ClassLoader loader) throws Exception {
+        return UnobfuscatorCache.getInstance().getClass(loader, "SettingsFragment", () -> {
+            String[] settingsIdentifiers = {
+                "help_center_url", 
+                "setting_help", 
+                "settings_privacy", 
+                "settings_account",
+                "privacy_checkup",
+                "lists_settings",
+                "group_privacy_settings"
+            };
+            
+            for (String identifier : settingsIdentifiers) {
+                try {
+                    Class<?> clazz = findFirstClassUsingStrings(loader, StringMatchType.Contains, identifier);
+                    if (clazz != null && !android.app.Activity.class.isAssignableFrom(clazz)) {
+                        // Check if it's a fragment class (standard or androidx)
+                        if (isFragmentClass(clazz)) {
+                            return clazz;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+            throw new ClassNotFoundException("SettingsFragment class not found");
+        });
+    }
+
+    private static boolean isFragmentClass(Class<?> clazz) {
+        while (clazz != null && !clazz.getName().equals("java.lang.Object")) {
+            String name = clazz.getName();
+            if (name.contains("Fragment") || name.equals("androidx.fragment.app.Fragment") || name.equals("android.app.Fragment")) {
+                return true;
+            }
+            clazz = clazz.getSuperclass();
+        }
+        return false;
     }
 }

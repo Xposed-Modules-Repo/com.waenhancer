@@ -116,10 +116,90 @@ public class ResId {
         public static int force_restore_backup_experimental;
         public static int force_restore_backup;
         public static int contact_probably_not_added;
+        public static int separate_groups_sum;
+        public static int separate_groups_unsupported_sum;
     }
 
     public static class array {
         public static int supported_versions_wpp;
         public static int supported_versions_business;
+    }
+
+    public static class xml {
+        public static int fragment_general;
+        public static int fragment_privacy;
+        public static int fragment_media;
+        public static int fragment_customization;
+        public static int embedded_settings_root;
+        public static int embedded_settings_general;
+        public static int embedded_settings_home_screen;
+        public static int embedded_settings_conversation;
+        public static int embedded_settings_privacy;
+        public static int embedded_settings_status;
+        public static int embedded_settings_calls;
+        public static int embedded_settings_media;
+        public static int embedded_settings_audio;
+        public static int embedded_settings_appearance;
+        public static int embedded_settings_advanced;
+    }
+
+    public static class style {
+        public static int Theme;
+        public static int Theme_Light;
+    }
+
+    public static class attr {
+    }
+
+    public static class layout {
+    }
+
+    public static class color {
+    }
+
+    public static class dimen {
+    }
+
+    public static void initLocal(android.content.Context context) {
+        if (string.app_name != 0) return; // Already initialized
+        try {
+            Class<?> rString = com.waenhancer.R.string.class;
+            for (java.lang.reflect.Field field : string.class.getFields()) {
+                try {
+                    java.lang.reflect.Field rField = rString.getField(field.getName());
+                    field.set(null, rField.getInt(null));
+                } catch (Exception ignored) {}
+            }
+            Class<?> rDrawable = com.waenhancer.R.drawable.class;
+            for (java.lang.reflect.Field field : drawable.class.getFields()) {
+                try {
+                    java.lang.reflect.Field rField = rDrawable.getField(field.getName());
+                    field.set(null, rField.getInt(null));
+                } catch (Exception ignored) {}
+            }
+            Class<?> rXml = com.waenhancer.R.xml.class;
+            for (java.lang.reflect.Field field : xml.class.getFields()) {
+                try {
+                    java.lang.reflect.Field rField = rXml.getField(field.getName());
+                    field.set(null, rField.getInt(null));
+                } catch (Exception ignored) {}
+            }
+            Class<?> rStyle = com.waenhancer.R.style.class;
+            for (java.lang.reflect.Field field : style.class.getFields()) {
+                try {
+                    java.lang.reflect.Field rField = rStyle.getField(field.getName());
+                    field.set(null, rField.getInt(null));
+                } catch (Exception ignored) {}
+            }
+            Class<?> rArray = com.waenhancer.R.array.class;
+            for (java.lang.reflect.Field field : array.class.getFields()) {
+                try {
+                    java.lang.reflect.Field rField = rArray.getField(field.getName());
+                    field.set(null, rField.getInt(null));
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            android.util.Log.e("WAE", "Local ResId init failed: " + e.getMessage());
+        }
     }
 }

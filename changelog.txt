@@ -1,7 +1,6 @@
-[Added]
-- Implemented In-App Update
+[Fixed]
+- Fixed Home Screen crashing in WA Enhancer General Section
+- Fixed slow scrolling in individual chats
 
-[Fixes]
-- Fixed update checker
-- Fixed crash on startup
-- Fixed hooks initialization
+[Improved]
+- Optimized startup performance 

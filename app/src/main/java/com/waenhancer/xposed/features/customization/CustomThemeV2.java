@@ -502,7 +502,8 @@ public class CustomThemeV2 extends Feature {
         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
             var color = (int) param.args[0];
 
-            if (param.thisObject instanceof TextView textView) {
+            if (param.thisObject instanceof TextView) {
+                TextView textView = (TextView) param.thisObject;
                 var id = Utils.getID("conversations_row_message_count", "id");
                 if (textView.getId() == id) {
                     return;

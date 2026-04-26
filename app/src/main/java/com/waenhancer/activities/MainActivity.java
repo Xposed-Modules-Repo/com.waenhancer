@@ -190,27 +190,32 @@ public class MainActivity extends BaseActivity {
     }
 
     private void scrollToPreferenceInCurrentFragment(String preferenceKey, String parentKey) {
-        // Get the current fragment from the ViewPager
-        int currentItem = binding.viewPager.getCurrentItem();
-        Fragment fragment = getSupportFragmentManager().findFragmentByTag("f" + currentItem);
-
-        if (fragment == null)
-            return;
-
-        // Handle different fragment types
-        if (fragment instanceof GeneralFragment || fragment instanceof HomeFragment) {
-            // These fragments have child fragments
-            if (parentKey != null && !parentKey.isEmpty()) {
-                // Navigate to sub-fragment first, then scroll
-                navigateToSubFragmentAndScroll(fragment, parentKey, preferenceKey);
-            } else {
-                // Direct scroll in current child fragment
-                scrollInChildFragment(fragment, preferenceKey);
+        // Use post to ensure ViewPager is ready
+        binding.viewPager.post(() -> {
+            int currentItem = binding.viewPager.getCurrentItem();
+            // In ViewPager2 with FragmentStateAdapter, fragments are tagged as "f" + position
+            Fragment fragment = getSupportFragmentManager().findFragmentByTag("f" + currentItem);
+            
+            if (fragment == null) {
+                // Try to find by ID if tag fails (depends on adapter implementation)
+                fragment = getSupportFragmentManager().findFragmentById(binding.viewPager.getId());
             }
-        } else if (fragment instanceof BasePreferenceFragment) {
-            // Direct preference fragments (no nesting)
-            ((BasePreferenceFragment) fragment).scrollToPreference(preferenceKey);
-        }
+
+            if (fragment == null) return;
+
+            if (fragment instanceof GeneralFragment || fragment instanceof HomeFragment) {
+                // Nested fragments (General/Home use a child fragment container)
+                if (parentKey != null && !parentKey.isEmpty()) {
+                    navigateToSubFragmentAndScroll(fragment, parentKey, preferenceKey);
+                } else {
+                    // Direct scroll in current child fragment
+                    scrollInChildFragment(fragment, preferenceKey);
+                }
+            } else if (fragment instanceof BasePreferenceFragment) {
+                // Direct preference fragments (no nesting)
+                ((BasePreferenceFragment) fragment).scrollToPreference(preferenceKey);
+            }
+        });
     }
 
     private void navigateToSubFragmentAndScroll(Fragment parentFragment, String parentKey, String childPreferenceKey) {

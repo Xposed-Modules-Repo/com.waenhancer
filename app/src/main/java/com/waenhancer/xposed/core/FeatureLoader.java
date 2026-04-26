@@ -73,6 +73,7 @@ import com.waenhancer.xposed.features.others.DebugFeature;
 import com.waenhancer.xposed.features.others.GoogleTranslate;
 import com.waenhancer.xposed.features.others.GroupAdmin;
 import com.waenhancer.xposed.features.others.MenuHome;
+import com.waenhancer.xposed.features.others.SettingsInjector;
 import com.waenhancer.xposed.features.others.Stickers;
 import com.waenhancer.xposed.features.others.TextStatusComposer;
 import com.waenhancer.xposed.features.others.ToastViewer;
@@ -132,6 +133,7 @@ public class FeatureLoader {
                     @SuppressWarnings("deprecation")
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                         mApp = (Application) param.args[0];
+                        String processName = Application.getProcessName();
 
                         // Inject Booloader Spoofer
                         if (pref.getBoolean("bootloader_spoofer", false)) {
@@ -144,6 +146,29 @@ public class FeatureLoader {
                         PackageInfo packageInfo = packageManager.getPackageInfo(mApp.getPackageName(), 0);
                         XposedBridge.log(packageInfo.versionName);
                         currentVersion = packageInfo.versionName;
+                        if (!Objects.equals(processName, mApp.getPackageName())) {
+                            XposedBridge.log("[WAE] Skipping heavy hook initialization in secondary process: " + processName);
+                            return;
+                        }
+
+                        // Diagnostic: Log theme-related preferences from multiple common files
+                        try {
+                            String[] prefFiles = {mApp.getPackageName() + "_preferences", "startup_prefs", "wa_global_prefs"};
+                            XposedBridge.log("[WAE] --- Host Preferences Broad Scan ---");
+                            for (String fileName : prefFiles) {
+                                var sharedPrefs = mApp.getSharedPreferences(fileName, Context.MODE_PRIVATE);
+                                for (var entry : sharedPrefs.getAll().entrySet()) {
+                                    String key = entry.getKey();
+                                    if (key.toLowerCase().contains("theme") || key.toLowerCase().contains("mode")) {
+                                        XposedBridge.log("[WAE] [" + fileName + "] " + key + " = " + entry.getValue());
+                                    }
+                                }
+                            }
+                            XposedBridge.log("[WAE] ------------------------------------");
+                        } catch (Exception e) {
+                            XposedBridge.log("[WAE] Failed to scan host prefs: " + e.getMessage());
+                        }
+
                         supportedVersions = Arrays.asList(mApp.getResources()
                                 .getStringArray(Objects.equals(mApp.getPackageName(), FeatureLoader.PACKAGE_WPP)
                                         ? ResId.array.supported_versions_wpp
@@ -419,6 +444,7 @@ public class FeatureLoader {
                 CopyStatus.class,
                 TextStatusComposer.class,
                 ToastViewer.class,
+                SettingsInjector.class,
                 MenuHome.class,
                 AntiWa.class,
                 CustomPrivacy.class,
@@ -459,7 +485,13 @@ public class FeatureLoader {
             }, executorService);
         }
         executorService.shutdown();
-        executorService.awaitTermination(15, TimeUnit.SECONDS);
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                XposedBridge.log("WAE: Features failed to load within 5 seconds");
+            }
+        } catch (InterruptedException e) {
+            XposedBridge.log(e);
+        }
         if (DebugFeature.DEBUG) {
             for (var time : times) {
                 if (time != null)

@@ -60,12 +60,12 @@ public class ConversationItemListener extends Feature {
                         Object fMessageObj = mAdapter.getItem(position);
                         if (fMessageObj == null) return;
                         var fMessage = new FMessageWpp(fMessageObj);
-                        var extraFMessage = XposedHelpers.getAdditionalInstanceField(param.thisObject, "fMessage");
+                        var extraFMessage = XposedHelpers.getAdditionalInstanceField(viewGroup, "fMessage");
                         if (Objects.equals(fMessage, extraFMessage)) return;
                         for (OnConversationItemListener listener : conversationListeners) {
-                            viewGroup.post(() -> listener.onItemBind(fMessage, viewGroup));
+                            listener.onItemBind(fMessage, viewGroup);
                         }
-                        XposedHelpers.setAdditionalInstanceField(param.thisObject, "fMessage", fMessage);
+                        XposedHelpers.setAdditionalInstanceField(viewGroup, "fMessage", fMessage);
                     }
                 });
             }

@@ -26,7 +26,8 @@ public abstract class Feature {
     public void logDebug(Object object) {
         if (!DEBUG) return;
         log(object);
-        if (object instanceof Throwable th) {
+        if (object instanceof Throwable) {
+            Throwable th = (Throwable) object;
             Log.i("WAE", this.getPluginName() + "-> " + th.getMessage(), th);
         } else {
             Log.i("WAE", this.getPluginName() + "-> " + object);
@@ -36,7 +37,8 @@ public abstract class Feature {
     public void logDebug(String title, Object object) {
         if (!DEBUG) return;
         log(title + ": " + object);
-        if (object instanceof Throwable th) {
+        if (object instanceof Throwable) {
+            Throwable th = (Throwable) object;
             Log.i("WAE", this.getPluginName() + "-> " + title + ": " + th.getMessage(), th);
         } else {
             Log.i("WAE", this.getPluginName() + "-> " + title + ": " + object);
@@ -50,6 +52,33 @@ public abstract class Feature {
             XposedBridge.log((Throwable) object);
         } else {
             XposedBridge.log(String.format("[%s] %s", this.getPluginName(), object));
+        }
+    }
+
+    protected String getSafeString(String key, String defaultValue) {
+        try {
+            prefs.reload();
+            Object val = prefs.getAll().get(key);
+            if (val == null) return defaultValue;
+            if (val instanceof String) return (String) val;
+            if (val instanceof Boolean) return (Boolean) val ? "1" : "0";
+            return String.valueOf(val);
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    protected float getSafeFloat(String key, float defaultValue) {
+        try {
+            Object val = prefs.getAll().get(key);
+            if (val == null) return defaultValue;
+            if (val instanceof Float) return (Float) val;
+            if (val instanceof Integer) return ((Integer) val).floatValue();
+            if (val instanceof String) return Float.parseFloat((String) val);
+            if (val instanceof Double) return ((Double) val).floatValue();
+            return defaultValue;
+        } catch (Exception e) {
+            return defaultValue;
         }
     }
 }

@@ -3,22 +3,22 @@ package com.waenhancer.preference;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.util.AttributeSet;
-import android.widget.SeekBar;
 import android.widget.TextView;
 
 import androidx.preference.Preference;
 import androidx.preference.PreferenceViewHolder;
 
 import com.waenhancer.R;
+import com.google.android.material.slider.Slider;
 
-public class FloatSeekBarPreference extends Preference implements SeekBar.OnSeekBarChangeListener {
+public class FloatSeekBarPreference extends Preference {
 
     private float minValue;
     private float maxValue;
     private float valueSpacing;
     private String format;
 
-    private SeekBar seekbar;
+    private Slider slider;
     private TextView textView;
 
     private float defaultValue = 0F;
@@ -49,7 +49,29 @@ public class FloatSeekBarPreference extends Preference implements SeekBar.OnSeek
 
     @Override
     protected void onSetInitialValue(Object defaultValue) {
-        newValue = getPersistedFloat((defaultValue instanceof Float) ? (Float) defaultValue : this.defaultValue);
+        float def = 0;
+        if (defaultValue instanceof Float) {
+            def = (Float) defaultValue;
+        } else if (defaultValue instanceof String) {
+            try {
+                def = Float.parseFloat((String) defaultValue);
+            } catch (Exception ignored) {}
+        } else {
+            def = this.defaultValue;
+        }
+
+        try {
+            newValue = getPersistedFloat(def);
+        } catch (Exception e) {
+            // If it fails (e.g. ClassCastException), try to get it as an int and convert
+            try {
+                newValue = (float) getPersistedInt((int) def);
+                // Also persist it as float for next time
+                persistFloat(newValue);
+            } catch (Exception e2) {
+                newValue = def;
+            }
+        }
     }
 
     @Override
@@ -57,35 +79,30 @@ public class FloatSeekBarPreference extends Preference implements SeekBar.OnSeek
         super.onBindViewHolder(holder);
 
         holder.itemView.setClickable(false);
-        seekbar = (SeekBar) holder.findViewById(R.id.seekbar);
+        slider = (Slider) holder.findViewById(R.id.seekbar);
         textView = (TextView) holder.findViewById(R.id.seekbar_value);
 
-        seekbar.setOnSeekBarChangeListener(this);
-        seekbar.setMax((int) ((maxValue - minValue) / valueSpacing));
-        seekbar.setProgress((int) ((newValue - minValue) / valueSpacing));
-        seekbar.setEnabled(isEnabled());
+        slider.setValueFrom(minValue);
+        slider.setValueTo(maxValue);
+        slider.setStepSize(valueSpacing);
+        slider.setValue(newValue);
+        slider.setEnabled(isEnabled());
+
+        slider.addOnChangeListener((slider, value, fromUser) -> {
+            textView.setText(String.format(format, value));
+        });
+
+        slider.addOnSliderTouchListener(new Slider.OnSliderTouchListener() {
+            @Override
+            public void onStartTrackingTouch(Slider slider) {}
+
+            @Override
+            public void onStopTrackingTouch(Slider slider) {
+                persistFloat(slider.getValue());
+            }
+        });
 
         textView.setText(String.format(format, newValue));
-    }
-
-    @Override
-    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-        if (!fromUser) {
-            return;
-        }
-        float v = minValue + progress * valueSpacing;
-        textView.setText(String.format(format, v));
-    }
-
-    @Override
-    public void onStartTrackingTouch(SeekBar seekBar) {
-        // Not used
-    }
-
-    @Override
-    public void onStopTrackingTouch(SeekBar seekBar) {
-        float v = minValue + seekBar.getProgress() * valueSpacing;
-        persistFloat(v);
     }
 
     private void init(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
@@ -103,7 +120,7 @@ public class FloatSeekBarPreference extends Preference implements SeekBar.OnSeek
     }
 
     public float getValue() {
-        return (seekbar != null) ? (seekbar.getProgress() * valueSpacing) + minValue : 0F;
+        return (slider != null) ? slider.getValue() : 0F;
     }
 
     public void setValue(float value) {
