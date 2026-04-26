@@ -40,7 +40,7 @@ public class ProviderSharedPreferences implements SharedPreferences {
     public String getString(String key, @Nullable String defValue) {
         try {
             return localPrefs.getString(key, defValue);
-        } catch (ClassCastException e) {
+        } catch (Exception e) {
             // Fallback: try to get any value as string
             try {
                 Object val = localPrefs.getAll().get(key);
@@ -67,7 +67,7 @@ public class ProviderSharedPreferences implements SharedPreferences {
     public float getFloat(String key, float defValue) {
         try {
             return localPrefs.getFloat(key, defValue);
-        } catch (ClassCastException e) {
+        } catch (Exception e) {
             try {
                 Object val = localPrefs.getAll().get(key);
                 if (val instanceof Integer) return ((Integer) val).floatValue();

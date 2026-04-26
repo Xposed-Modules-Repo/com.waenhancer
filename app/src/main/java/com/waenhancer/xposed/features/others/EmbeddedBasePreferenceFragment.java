@@ -47,12 +47,31 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
         var localPrefs = requireContext().getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
         mPrefs = new ProviderSharedPreferences(requireContext(), localPrefs);
-        try {
-            var field = androidx.preference.PreferenceManager.class.getDeclaredField("mSharedPreferences");
-            field.setAccessible(true);
-            field.set(getPreferenceManager(), mPrefs);
-        } catch (Exception ignored) {
-        }
+
+        getPreferenceManager().setPreferenceDataStore(new androidx.preference.PreferenceDataStore() {
+            @Override
+            public void putString(String key, @Nullable String value) { mPrefs.edit().putString(key, value).apply(); }
+            @Override
+            @Nullable
+            public String getString(String key, @Nullable String defValue) { return mPrefs.getString(key, defValue); }
+            @Override
+            public void putBoolean(String key, boolean value) { mPrefs.edit().putBoolean(key, value).apply(); }
+            @Override
+            public boolean getBoolean(String key, boolean defValue) { return mPrefs.getBoolean(key, defValue); }
+            @Override
+            public void putInt(String key, int value) { mPrefs.edit().putInt(key, value).apply(); }
+            @Override
+            public int getInt(String key, int defValue) { return mPrefs.getInt(key, defValue); }
+            @Override
+            public void putFloat(String key, float value) { mPrefs.edit().putFloat(key, value).apply(); }
+            @Override
+            public float getFloat(String key, float defValue) { return mPrefs.getFloat(key, defValue); }
+            @Override
+            public void putLong(String key, long value) { mPrefs.edit().putLong(key, value).apply(); }
+            @Override
+            public long getLong(String key, long defValue) { return mPrefs.getLong(key, defValue); }
+        });
+
         mPrefs.registerOnSharedPreferenceChangeListener(this);
     }
 
@@ -302,9 +321,11 @@ public abstract class EmbeddedBasePreferenceFragment extends PreferenceFragmentC
         Preference callBlockContacts = findPreference("call_block_contacts");
         Preference callWhiteContacts = findPreference("call_white_contacts");
         if (callBlockContacts != null && callWhiteContacts != null) {
-            int callType = Integer.parseInt(mPrefs.getString("call_privacy", "0"));
-            callBlockContacts.setEnabled(callType == 3);
-            callWhiteContacts.setEnabled(callType == 4);
+            try {
+                int callType = Integer.parseInt(mPrefs.getString("call_privacy", "0"));
+                callBlockContacts.setEnabled(callType == 3);
+                callWhiteContacts.setEnabled(callType == 4);
+            } catch (Exception ignored) {}
         }
 
         if (Objects.equals(key, "force_english")) {

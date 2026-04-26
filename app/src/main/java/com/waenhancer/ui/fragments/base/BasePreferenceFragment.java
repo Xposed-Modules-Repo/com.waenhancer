@@ -41,7 +41,33 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
-        mPrefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        var localPrefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        mPrefs = new com.waenhancer.preference.SafeSharedPreferences(localPrefs);
+
+        getPreferenceManager().setPreferenceDataStore(new androidx.preference.PreferenceDataStore() {
+            @Override
+            public void putString(String key, @Nullable String value) { mPrefs.edit().putString(key, value).apply(); }
+            @Override
+            @Nullable
+            public String getString(String key, @Nullable String defValue) { return mPrefs.getString(key, defValue); }
+            @Override
+            public void putBoolean(String key, boolean value) { mPrefs.edit().putBoolean(key, value).apply(); }
+            @Override
+            public boolean getBoolean(String key, boolean defValue) { return mPrefs.getBoolean(key, defValue); }
+            @Override
+            public void putInt(String key, int value) { mPrefs.edit().putInt(key, value).apply(); }
+            @Override
+            public int getInt(String key, int defValue) { return mPrefs.getInt(key, defValue); }
+            @Override
+            public void putFloat(String key, float value) { mPrefs.edit().putFloat(key, value).apply(); }
+            @Override
+            public float getFloat(String key, float defValue) { return mPrefs.getFloat(key, defValue); }
+            @Override
+            public void putLong(String key, long value) { mPrefs.edit().putLong(key, value).apply(); }
+            @Override
+            public long getLong(String key, long defValue) { return mPrefs.getLong(key, defValue); }
+        });
+
         mPrefs.registerOnSharedPreferenceChangeListener(this);
         requireActivity().getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -277,7 +303,10 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat
         var callBlockContacts = findPreference("call_block_contacts");
         var callWhiteContacts = findPreference("call_white_contacts");
         if (callBlockContacts != null && callWhiteContacts != null) {
-            var callType = Integer.parseInt(mPrefs.getString("call_privacy", "0"));
+            int callType = 0;
+            try {
+                callType = Integer.parseInt(mPrefs.getString("call_privacy", "0"));
+            } catch (Exception ignored) {}
             switch (callType) {
                 case 3:
                     callBlockContacts.setEnabled(true);
