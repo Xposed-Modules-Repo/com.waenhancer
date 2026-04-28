@@ -189,14 +189,14 @@ jobs:
           cp app/build/outputs/apk/whatsapp/release/app-whatsapp-release.apk "release_artifacts/WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk"
 
       - name: Upload WhatsApp flavor artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk
           path: release_artifacts/WaEnhancer-v${{ env.NEW_VERSION_NAME }}.apk
 
       - name: Upload to GitHub release
         id: release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: WaEnhancer ${{ env.NEW_VERSION_NAME }}
