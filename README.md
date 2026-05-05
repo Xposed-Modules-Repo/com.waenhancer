@@ -15,7 +15,8 @@
 ## Main Features
 
 ### Privacy & Security
-- `Anti-Revoke`
+- `Anti-Revoke Messages (Delete for everyone + Delete for me)`
+- `Anti-Revoke Status`
 - `Anti-View Once`
 - `Hide Read Receipts`
 - `Hide Delivery Reports`
