@@ -80,6 +80,9 @@
 
 
 ---
+### ⚖️ Credits & Acknowledgements
+WaEnhancerX originally started as a fork of **WaEnhancer** by **Dev4Mod**. I deeply respect and acknowledge the foundational open-source work provided by the original author.
+
 *Built for the community.*
 
-*Managed by [Mubashar Dev](https://mubashar.dev)*
+*Managed and Optimized by [Mubashar Dev](https://mubashar.dev)*
