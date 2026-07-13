@@ -1,6 +1,6 @@
 # WaEnhancer X
 <div align="center">
-  <p><strong>WaEnhancer X is a powerful Xposed/LSPosed module that supercharges your WhatsApp experience with advanced privacy, customization, and utility features.</strong></p>
+  <p><strong><a href="https://waenhancer.com">WaEnhancer X</a> is a powerful Xposed/LSPosed module that supercharges your WhatsApp experience with advanced privacy, customization, and utility features.</strong></p>
 
   [![Telegram](https://telegram-badge.pages.dev/api/telegram-badge?channelId=@waenhancerx&label=Channel&showOnline=true)](https://t.me/waenhancerx)
   [![Telegram](https://telegram-badge.pages.dev/api/telegram-badge?channelId=@waenhancerxhub&label=Community&showOnline=true)](https://t.me/waenhancerxhub)
